@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "echo \"cwd: $(pwd)\" && ls -la && ls -la tool && bash tool/vercel-build.sh",
+  "buildCommand": "if [ -f tool/vercel-build.sh ]; then bash tool/vercel-build.sh; else bash ../tool/vercel-build.sh; fi",
   "outputDirectory": "build/web",
   "installCommand": "true",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
