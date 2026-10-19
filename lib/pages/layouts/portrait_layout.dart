@@ -5,6 +5,7 @@ import '../../shared/state.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../app_shell.dart';
+import 'desktop_layout.dart';
 
 /// Header 56 (logo, then language / calculator / my page / logout on the right), tab chips in two rows below it,
 /// bottom tabs (hidden while the keyboard is up).
@@ -30,12 +31,7 @@ class PortraitLayout extends ConsumerWidget {
               Container(
                 height: AppDims.portraitHeader,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: const BoxDecoration(
-                  color: AppColors.paper,
-                  border: Border(
-                    bottom: BorderSide(color: AppColors.ink, width: AppDims.borderWidth),
-                  ),
-                ),
+                decoration: shellBarDecoration(const Border(bottom: BorderSide(color: AppColors.line))),
                 child: Row(
                   children: [
                     Semantics(
@@ -61,8 +57,6 @@ class PortraitLayout extends ConsumerWidget {
           ? null
           : NavigationBar(
               height: 64,
-              backgroundColor: AppColors.paper,
-              indicatorColor: AppColors.accent,
               selectedIndex: selected < 0 ? 0 : selected,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               onDestinationSelected: (i) => ref.read(navProvider.notifier).group(MenuGroup.values[i]),

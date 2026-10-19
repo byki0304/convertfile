@@ -15,6 +15,10 @@ class AppColors {
   static const danger = Color(0xFFE5484D);
   static const ok = Color(0xFF2FA36B);
   static const errorCard = Color(0xFFFFE4EC);
+  static const sidebar = Color(0xFFF7F9FC);
+  static const sideSelected = Color(0xFFE3E9F3);
+  static const line = Color(0xFFD5DCE8);
+  static const wash = Color(0xFFD9E4F4);
 
   static const md = Color(0xFF4B5563);
   static const pdf = Color(0xFFE5484D);
@@ -35,14 +39,24 @@ class AppDims {
   static const sidebarNarrow = 76.0;
   static const rail = 58.0;
   static const contentMax = 1100.0;
+  static const recentPanel = 300.0;
 }
 
 BoxDecoration cardDecoration({Color color = AppColors.paper, bool lifted = false}) => BoxDecoration(
   color: color,
   borderRadius: BorderRadius.circular(AppDims.cardRadius),
   border: Border.all(color: AppColors.ink, width: AppDims.borderWidth),
-  boxShadow: [BoxShadow(color: AppColors.ink, offset: Offset(0, lifted ? 6 : 3), blurRadius: lifted ? 8 : 0)],
+  boxShadow: [
+    BoxShadow(
+      color: AppColors.ink.withValues(alpha: lifted ? 0.22 : 0.12),
+      offset: Offset(0, lifted ? 8 : 4),
+      blurRadius: lifted ? 18 : 10,
+    ),
+  ],
 );
+
+/// Small pill buttons and chips share this outline.
+const pillBorder = StadiumBorder(side: BorderSide(color: AppColors.ink, width: 1.3));
 
 class ReadingSettings {
   const ReadingSettings({this.fontLevel = 3, this.lineLevel = 4});
@@ -130,6 +144,31 @@ ThemeData buildTheme(AppLang lang, ReadingSettings reading) {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.ink,
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: AppColors.paper,
+      shape: pillBorder,
+      side: const BorderSide(color: AppColors.ink, width: 1.3),
+      labelStyle: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w700),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    ),
+    dividerTheme: const DividerThemeData(color: AppColors.line, thickness: 1),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: AppColors.paper,
+      indicatorColor: AppColors.sideSelected,
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (s) =>
+            TextStyle(fontSize: 12, fontWeight: s.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w600, color: AppColors.ink),
+      ),
+      iconTheme: WidgetStateProperty.resolveWith(
+        (s) => IconThemeData(color: s.contains(WidgetState.selected) ? AppColors.primary : AppColors.ink),
       ),
     ),
     checkboxTheme: CheckboxThemeData(side: const BorderSide(color: AppColors.ink, width: 1.6)),

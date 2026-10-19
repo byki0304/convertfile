@@ -160,44 +160,7 @@ class _ConvertPageState extends ConsumerState<ConvertPage> {
           const SizedBox(height: 12),
           Wrap(spacing: 6, runSpacing: 6, children: [for (final e in acceptedInputs[target]!) FormatPill(e.toUpperCase(), ext: e)]),
           const SizedBox(height: 14),
-          Semantics(
-            button: true,
-            label: t.s('파일 선택', 'Choose file', 'ファイルを選択'),
-            child: InkWell(
-              onTap: _pick,
-              borderRadius: BorderRadius.circular(14),
-              child: ValueListenableBuilder<bool>(
-                valueListenable: fileDragActive,
-                builder: (context, dragging, _) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  height: 130,
-                  decoration: BoxDecoration(
-                    color: dragging ? AppColors.aiBubble : AppColors.bg,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.primary, width: dragging ? 3 : 1.6),
-                  ),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(dragging ? Icons.file_download : Icons.upload_file, size: 36, color: AppColors.primary),
-                      const SizedBox(height: 6),
-                      Text(
-                        dragging
-                            ? t.s('여기에 놓으세요', 'Drop it here', 'ここにドロップ')
-                            : desktop
-                            ? t.s('파일을 끌어다 놓거나 눌러서 고르세요', 'Drop a file here or click to choose', 'ファイルをドラッグするかクリックして選択')
-                            : t.s('눌러서 파일을 고르세요', 'Tap to choose a file', 'タップしてファイルを選択'),
-                        textAlign: TextAlign.center,
-                        style: dragging ? const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary) : null,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          UploadDropZone(onTap: _pick, compact: !desktop),
           const SizedBox(height: 10),
           if (file != null)
             Align(

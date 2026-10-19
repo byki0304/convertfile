@@ -119,14 +119,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Center(child: Foldy(pose: FoldyPose.wave, size: 84)),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'ConvertFile',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink),
+                    Semantics(
+                      label: 'ConvertFile',
+                      header: true,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: AspectRatio(
+                          aspectRatio: 724 / 440,
+                          child: Image.asset(
+                            'assets/brand/hero.jpg',
+                            fit: BoxFit.cover,
+                            excludeFromSemantics: true,
+                            errorBuilder: (_, _, _) => const Center(child: AppLogo(size: 48)),
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
                     Text(
                       t.tagline,
                       textAlign: TextAlign.center,

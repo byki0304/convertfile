@@ -151,11 +151,16 @@ class _PdfMergePageState extends ConsumerState<PdfMergePage> {
               ),
             ),
             if (items.isEmpty)
-              EmptyState(
-                t.s(
-                  'PDF 파일을 올려 주세요. 최대 20개까지 합칠 수 있습니다.',
-                  'Upload PDF files. You can merge up to 20.',
-                  'PDFファイルをアップロードしてください。最大20個まで結合できます。',
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: UploadDropZone(
+                  onTap: _busy ? null : _pick,
+                  multiple: true,
+                  caption: t.s(
+                    'PDF 파일을 올려 주세요. 최대 20개까지 합칠 수 있습니다.',
+                    'Upload PDF files. You can merge up to 20.',
+                    'PDFファイルをアップロードしてください。最大20個まで結合できます。',
+                  ),
                 ),
               ),
             ReorderableListView.builder(

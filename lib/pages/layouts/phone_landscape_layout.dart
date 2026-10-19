@@ -5,8 +5,10 @@ import '../../shared/state.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../app_shell.dart';
+import 'desktop_layout.dart';
 
-/// Left rail 58 wide (logo = home, 4 group icons). Top strip: tabs on the left, header buttons on the right.
+/// Left rail 58 wide (logo = home, 4 group icons). Top strip 46: tabs on the left, header buttons on the right, so
+/// the short landscape height goes to the content.
 class PhoneLandscapeLayout extends ConsumerWidget {
   const PhoneLandscapeLayout({super.key, required this.body});
 
@@ -25,13 +27,11 @@ class PhoneLandscapeLayout extends ConsumerWidget {
               Container(
                 width: AppDims.rail,
                 decoration: const BoxDecoration(
-                  color: AppColors.paper,
-                  border: Border(
-                    right: BorderSide(color: AppColors.ink, width: AppDims.borderWidth),
-                  ),
+                  color: AppColors.sidebar,
+                  border: Border(right: BorderSide(color: AppColors.line)),
                 ),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
                   child: Column(
                     children: [
                       Semantics(
@@ -39,20 +39,20 @@ class PhoneLandscapeLayout extends ConsumerWidget {
                         label: t.groupHome,
                         child: InkWell(
                           onTap: () => ref.read(navProvider.notifier).home(),
-                          child: const Padding(padding: EdgeInsets.all(6), child: AppLogo(compact: true, size: 34)),
+                          child: const Padding(padding: EdgeInsets.all(4), child: AppLogo(compact: true, size: 34)),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       for (final g in MenuGroup.values)
-                        IconButton(
-                          tooltip: groupLabel(t, g),
-                          isSelected: !nav.myPage && nav.group == g,
-                          style: IconButton.styleFrom(
-                            backgroundColor: !nav.myPage && nav.group == g ? AppColors.primary : null,
-                            foregroundColor: !nav.myPage && nav.group == g ? Colors.white : AppColors.ink,
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: SideItem(
+                            icon: groupIcon(g),
+                            label: groupLabel(t, g),
+                            selected: !nav.myPage && nav.group == g,
+                            iconOnly: true,
+                            onTap: () => ref.read(navProvider.notifier).group(g),
                           ),
-                          onPressed: () => ref.read(navProvider.notifier).group(g),
-                          icon: Icon(groupIcon(g)),
                         ),
                     ],
                   ),
@@ -62,10 +62,8 @@ class PhoneLandscapeLayout extends ConsumerWidget {
                 child: Column(
                   children: [
                     Container(
-                      decoration: const BoxDecoration(
-                        color: AppColors.paper,
-                        border: Border(bottom: BorderSide(color: AppColors.ink, width: 1.2)),
-                      ),
+                      constraints: const BoxConstraints(minHeight: 46),
+                      decoration: shellBarDecoration(const Border(bottom: BorderSide(color: AppColors.line))),
                       padding: const EdgeInsets.only(right: 8),
                       child: Row(
                         children: [

@@ -41,6 +41,13 @@ Future<void> downloadConversion(BuildContext context, WidgetRef ref, String conv
   }
 }
 
+JobStatus jobStatusOf(Conversion c) => switch (c.status) {
+  'done' => c.isDone ? JobStatus.done : JobStatus.running,
+  'failed' => JobStatus.failed,
+  'running' => JobStatus.running,
+  _ => JobStatus.queued,
+};
+
 /// Recent conversions (10 per page). [target] null lists every format (my page).
 class ConversionList extends ConsumerStatefulWidget {
   const ConversionList({super.key, this.target, this.pending = const [], required this.emptyText});
@@ -248,12 +255,7 @@ class _ConversionListState extends ConsumerState<ConversionList> {
 
   Widget _row(AppText t, Conversion c, bool backup) {
     final now = DateTime.now();
-    final status = switch (c.status) {
-      'done' => c.isDone ? JobStatus.done : JobStatus.running,
-      'failed' => JobStatus.failed,
-      'running' => JobStatus.running,
-      _ => JobStatus.queued,
-    };
+    final status = jobStatusOf(c);
     final expanded = _expanded.contains(c.id);
     final h = c.hoursLeft(now);
     return ExpandableRow(

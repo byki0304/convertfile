@@ -202,9 +202,12 @@ class _PdfEditPageState extends ConsumerState<PdfEditPage> {
                 child: Text(_message!, style: TextStyle(color: _messageError ? AppColors.danger : AppColors.ok)),
               ),
             if (d == null || m == null)
-              InkWell(
-                onTap: _pick,
-                child: EmptyState(t.s('편집할 PDF 파일 하나를 올려 주세요.', 'Upload one PDF file to edit.', '編集するPDFファイルを1つアップロードしてください。')),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: UploadDropZone(
+                  onTap: _busy ? null : _pick,
+                  caption: t.s('편집할 PDF 파일 하나를 올려 주세요.', 'Upload one PDF file to edit.', '編集するPDFファイルを1つアップロードしてください。'),
+                ),
               )
             else ...[
               Wrap(

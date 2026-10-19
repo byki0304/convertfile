@@ -9,6 +9,19 @@ AI 문서 변환 작업대. Flutter 웹 PWA(Vercel) + Firebase(Auth, Firestore, 
 | `functions/` | Cloud Functions (Node 22, `asia-northeast3`) |
 | `engine/` | Cloud Run 변환 엔진 (LibreOffice + H2Orestart + Pandoc + 무료 글꼴) |
 | `tool/` | `vercel-build.sh`, `make_icons.py` |
+| `app_icons/` | 플랫폼별 앱 아이콘 (원본 `app_icon_master.png`) |
+
+## 앱 아이콘
+
+`python tool/make_icons.py`가 `app_icons/app_icon_master.png` 하나로 모든 아이콘을 만들고, 웹용은 `web/icons`, `web/favicon.ico`에 복사합니다. 원본을 바꾸면 다시 실행하세요(`flutter test`가 매니페스트·HTML·각 폴더의 파일과 크기를 확인합니다).
+
+| 폴더 | 쓰는 곳 |
+|---|---|
+| `app_icons/web` | PWA 설치(`manifest.json`의 any/maskable), iPhone·iPad 홈 화면(`apple-touch-icon-*`), 파비콘, Windows 타일(`browserconfig.xml`) |
+| `app_icons/android` | `android/app/src/main/res/`에 폴더째 복사 (`mipmap-*`, `mipmap-anydpi-v26` 적응형, `values/ic_launcher_background.xml`), Play 스토어 512 |
+| `app_icons/ios` | `ios/Runner/Assets.xcassets/AppIcon.appiconset`을 이 폴더로 교체 (iPhone·iPad·App Store 1024) |
+| `app_icons/tablet` | iPad 단독 크기와 안드로이드 태블릿 크기 (스토어 등록·MDM 배포용) |
+| `app_icons/desktop` | Windows `windows/app_icon.ico`(→ `windows/runner/resources/app_icon.ico`), macOS `macos/AppIcon.icns`, PNG 16~1024 |
 
 ## 로컬 확인
 

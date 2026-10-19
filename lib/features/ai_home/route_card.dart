@@ -113,30 +113,42 @@ class _RouteCardState extends ConsumerState<RouteCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (srcExt != null && srcExt.isNotEmpty) ...[
-                FormatCard(srcExt, size: 30),
+                FlowTile(label: srcExt.toUpperCase(), caption: t.s('원본', 'Source', '元'), colors: sourceGradient, size: 52),
                 const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.arrow_forward, color: AppColors.accent),
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Icon(Icons.arrow_forward_rounded, color: AppColors.accent, size: 28),
                 ),
               ],
-              FormatCard(dstExt == 'calc' ? 'calc' : dstExt, size: 30),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
+              FlowTile(
+                label: dstExt == 'calc' ? t.groupCalc : dstExt.toUpperCase(),
+                caption: t.s('결과', 'Result', '結果'),
+                colors: resultGradient,
+                size: 52,
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 6,
             children: [
               if (target != null && canConvert)
-                FilledButton(onPressed: _busy ? null : _convertNow, child: Text(t.s('바로 변환', 'Convert now', '今すぐ変換'))),
-              OutlinedButton(onPressed: _busy ? null : _goMenu, child: Text(t.s('메뉴로 이동', 'Go to menu', 'メニューへ移動'))),
+                FilledButton.icon(
+                  onPressed: _busy ? null : _convertNow,
+                  icon: const Icon(Icons.bolt_rounded, size: 18),
+                  label: Text(t.s('바로 변환', 'Convert now', '今すぐ変換')),
+                ),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _goMenu,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                label: Text(t.s('메뉴로 이동', 'Go to menu', 'メニューへ移動')),
+              ),
             ],
           ),
         ],

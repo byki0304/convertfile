@@ -8,8 +8,9 @@ import 'file_rules.dart';
 import 'logic/frame.dart';
 import 'state.dart';
 import 'theme.dart';
+import 'web/picked_file.dart';
 
-/// Light grid workbench background.
+/// Grid-paper workbench with soft watercolor washes in the corners.
 class GridBackground extends StatelessWidget {
   const GridBackground({super.key, required this.child});
 
@@ -23,6 +24,24 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.bg);
+    void wash(Offset c, double r, double alpha) {
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              AppColors.wash.withValues(alpha: alpha),
+              AppColors.wash.withValues(alpha: 0),
+            ],
+          ).createShader(Rect.fromCircle(center: c, radius: r)),
+      );
+    }
+
+    final m = math.max(size.width, size.height);
+    wash(Offset(size.width * 0.08, size.height * 0.92), m * 0.45, 0.75);
+    wash(Offset(size.width * 0.95, size.height * 0.12), m * 0.38, 0.6);
+    wash(Offset(size.width * 0.55, size.height * 1.05), m * 0.3, 0.4);
     final p = Paint()
       ..color = AppColors.grid
       ..strokeWidth = 1;
@@ -207,7 +226,26 @@ class _FoldyPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
     final fill = Paint()..color = pose == FoldyPose.dizzy ? AppColors.errorCard : Colors.white;
     final head = pose == FoldyPose.head || pose == FoldyPose.logo;
-    final body = head ? Rect.fromLTWH(18 * s, 10 * s, 64 * s, 72 * s) : Rect.fromLTWH(26 * s, 8 * s, 48 * s, 62 * s);
+    final body = head ? Rect.fromLTWH(22 * s, 14 * s, 56 * s, 66 * s) : Rect.fromLTWH(26 * s, 8 * s, 48 * s, 62 * s);
+    final arrow = Paint()
+      ..color = AppColors.accent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7 * s
+      ..strokeCap = StrokeCap.round;
+    if (pose == FoldyPose.logo) {
+      final ring = Rect.fromCircle(center: Offset(50 * s, 50 * s), radius: 44 * s);
+      canvas.drawArc(ring, math.pi * 0.62, math.pi * 1.55, false, arrow);
+      final a = math.pi * 0.62 + math.pi * 1.55;
+      final tip = Offset(50 * s + math.cos(a) * 44 * s, 50 * s + math.sin(a) * 44 * s);
+      canvas.drawPath(
+        Path()
+          ..moveTo(tip.dx + 9 * s, tip.dy)
+          ..lineTo(tip.dx - 5 * s, tip.dy - 8 * s)
+          ..lineTo(tip.dx - 4 * s, tip.dy + 9 * s)
+          ..close(),
+        Paint()..color = AppColors.accent,
+      );
+    }
     final fold = 14 * s;
     final path = Path()
       ..moveTo(body.left + 6 * s, body.top)
@@ -220,13 +258,20 @@ class _FoldyPainter extends CustomPainter {
       ..lineTo(body.left, body.top + 6 * s)
       ..quadraticBezierTo(body.left, body.top, body.left + 6 * s, body.top)
       ..close();
-    canvas.drawPath(path.shift(Offset(0, 3 * s)), Paint()..color = AppColors.ink);
+    if (!head) {
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(body.center.dx, 96 * s), width: body.width * 1.1, height: 6 * s),
+        Paint()..color = AppColors.ink.withValues(alpha: 0.12),
+      );
+    }
     canvas.drawPath(path, fill);
     canvas.drawPath(path, stroke);
     final corner = Path()
       ..moveTo(body.right - fold, body.top)
       ..lineTo(body.right - fold, body.top + fold)
-      ..lineTo(body.right, body.top + fold);
+      ..lineTo(body.right, body.top + fold)
+      ..close();
+    canvas.drawPath(corner, Paint()..color = AppColors.sideSelected);
     canvas.drawPath(corner, stroke);
 
     final eyeY = body.top + body.height * 0.38;
@@ -239,23 +284,17 @@ class _FoldyPainter extends CustomPainter {
       }
     } else {
       final eye = Paint()..color = AppColors.ink;
-      canvas.drawCircle(Offset(cx - eyeDx, eyeY), 4 * s, eye);
-      canvas.drawCircle(Offset(cx + eyeDx, eyeY), 4 * s, eye);
+      final glint = Paint()..color = Colors.white;
+      for (final x in [cx - eyeDx, cx + eyeDx]) {
+        canvas.drawCircle(Offset(x, eyeY), 4.2 * s, eye);
+        canvas.drawCircle(Offset(x + 1.3 * s, eyeY - 1.4 * s), 1.3 * s, glint);
+      }
+      final cheek = Paint()..color = const Color(0xFFF7B7B0).withValues(alpha: 0.85);
+      canvas.drawOval(Rect.fromCenter(center: Offset(cx - eyeDx - 4 * s, eyeY + 8 * s), width: 8 * s, height: 5 * s), cheek);
+      canvas.drawOval(Rect.fromCenter(center: Offset(cx + eyeDx + 4 * s, eyeY + 8 * s), width: 8 * s, height: 5 * s), cheek);
     }
-    final mouth = Rect.fromCenter(center: Offset(cx, eyeY + 10 * s), width: 12 * s, height: 8 * s);
-    canvas.drawArc(mouth, 0.2, math.pi - 0.4, false, stroke);
-
-    final arrow = Paint()
-      ..color = AppColors.accent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5 * s
-      ..strokeCap = StrokeCap.round;
-    final ac = Offset(cx, body.bottom - body.height * 0.22);
-    final ar = body.width * 0.2;
-    canvas.drawArc(Rect.fromCircle(center: ac, radius: ar), -math.pi * 0.1, math.pi * 1.5, false, arrow);
-    final tip = ac + Offset(math.cos(-math.pi * 0.1) * ar, math.sin(-math.pi * 0.1) * ar);
-    canvas.drawLine(tip, tip + Offset(-6 * s, -2 * s), arrow);
-    canvas.drawLine(tip, tip + Offset(1 * s, -7 * s), arrow);
+    final mouth = Rect.fromCenter(center: Offset(cx, eyeY + 7 * s), width: 10 * s, height: 7 * s);
+    canvas.drawArc(mouth, 0.25, math.pi - 0.5, false, stroke);
 
     if (head) return;
     final armY = body.top + body.height * 0.62;
@@ -304,7 +343,7 @@ class AppLogo extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           'ConvertFile',
-          style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink, fontSize: size * 0.55),
+          style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink, fontSize: size * 0.6, letterSpacing: -0.3),
         ),
       ],
     ],
@@ -491,19 +530,246 @@ void showSnack(BuildContext context, String message, {String? actionLabel, VoidC
     );
 }
 
+/// Rounded box with a dashed outline (upload and drop areas).
+class DashedBox extends StatelessWidget {
+  const DashedBox({super.key, required this.child, this.active = false, this.radius = 14});
+
+  final Widget child;
+  final bool active;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _DashedPainter(active: active, radius: radius),
+    child: child,
+  );
+}
+
+class _DashedPainter extends CustomPainter {
+  _DashedPainter({required this.active, required this.radius});
+
+  final bool active;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    canvas.drawRRect(rrect, Paint()..color = active ? AppColors.aiBubble : AppColors.paper.withValues(alpha: 0.7));
+    final paint = Paint()
+      ..color = active ? AppColors.primary : AppColors.ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = active ? 2.4 : 1.4;
+    for (final metric in (Path()..addRRect(rrect.deflate(0.7))).computeMetrics()) {
+      for (double d = 0; d < metric.length; d += 10) {
+        canvas.drawPath(metric.extractPath(d, math.min(d + 6, metric.length)), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedPainter old) => old.active != active || old.radius != radius;
+}
+
+/// Dashed "drag a file here or click" area shared by every upload screen; lights up while a file is dragged over the window.
+class UploadDropZone extends ConsumerWidget {
+  const UploadDropZone({super.key, required this.onTap, this.caption, this.compact = false, this.multiple = false});
+
+  final VoidCallback? onTap;
+  final String? caption;
+  final bool compact;
+  final bool multiple;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(textProvider);
+    return ValueListenableBuilder<bool>(
+      valueListenable: fileDragActive,
+      builder: (context, dragging, _) => Semantics(
+        button: true,
+        label: multiple ? t.s('파일 추가', 'Add files', 'ファイル追加') : t.s('파일 선택', 'Choose a file', 'ファイルを選択'),
+        onTap: onTap,
+        excludeSemantics: true,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: DashedBox(
+            active: dragging,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: compact ? 14 : 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    dragging ? Icons.file_download_outlined : Icons.cloud_upload_outlined,
+                    size: compact ? 28 : 36,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          dragging
+                              ? t.s('여기에 놓으세요', 'Drop it here', 'ここにドロップ')
+                              : t.s('파일을 끌어다 놓거나 눌러서 선택하세요', 'Drag a file here or click to choose', 'ファイルをドラッグするか、クリックして選択'),
+                          style: TextStyle(fontWeight: FontWeight.w800, color: dragging ? AppColors.primary : AppColors.ink),
+                        ),
+                        if (caption != null && !compact)
+                          Text(caption!, maxLines: 2, style: const TextStyle(color: AppColors.sub, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Speech bubble with a small tail on the left bottom (hint text next to Foldy).
+class SpeechBubble extends StatelessWidget {
+  const SpeechBubble({super.key, required this.child, this.tailRight = false});
+
+  final Widget child;
+  final bool tailRight;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _BubblePainter(tailRight),
+    child: Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 22), child: child),
+  );
+}
+
+class _BubblePainter extends CustomPainter {
+  _BubblePainter(this.tailRight);
+
+  final bool tailRight;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final body = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.width, size.height - 10), const Radius.circular(16));
+    final tx = tailRight ? size.width - 36 : 28.0;
+    final path = Path()
+      ..addRRect(body)
+      ..moveTo(tx, size.height - 11)
+      ..lineTo(tx + (tailRight ? 14 : -6), size.height)
+      ..lineTo(tx + (tailRight ? -4 : 16), size.height - 11)
+      ..close();
+    final merged = Path.combine(PathOperation.union, Path()..addRRect(body), path);
+    canvas.drawShadow(merged, AppColors.ink.withValues(alpha: 0.4), 3, false);
+    canvas.drawPath(merged, Paint()..color = AppColors.paper);
+    canvas.drawPath(
+      merged,
+      Paint()
+        ..color = AppColors.ink
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BubblePainter old) => old.tailRight != tailRight;
+}
+
+/// Preset pill with the yellow arrow badge.
+class PresetPill extends StatelessWidget {
+  const PresetPill({super.key, required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0xFFFFF8E6),
+    shape: pillBorder,
+    elevation: 0,
+    child: InkWell(
+      customBorder: pillBorder,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+              child: const Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.ink),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Gradient tile used for 원본 → 결과 in route cards.
+class FlowTile extends StatelessWidget {
+  const FlowTile({super.key, required this.label, required this.caption, required this.colors, this.size = 64});
+
+  final String label;
+  final String caption;
+  final List<Color> colors;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size * 1.35,
+    height: size,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [BoxShadow(color: AppColors.ink.withValues(alpha: 0.18), offset: const Offset(0, 3), blurRadius: 8)],
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 6),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+          ),
+          Text(
+            caption,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+const sourceGradient = [Color(0xFFF2994A), Color(0xFFE5484D), Color(0xFFD4589F)];
+const resultGradient = [Color(0xFF2FA36B), Color(0xFF2F6FE4), Color(0xFF7B5CD6)];
+
 /// Centers page content at the 1100 max width and scrolls the whole menu on short screens.
 class PageBody extends StatelessWidget {
-  const PageBody({super.key, required this.child, this.padding = const EdgeInsets.all(16)});
+  const PageBody({super.key, required this.child, this.padding = const EdgeInsets.all(16), this.maxWidth = AppDims.contentMax});
 
   final Widget child;
   final EdgeInsets padding;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     padding: padding,
     child: Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppDims.contentMax),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
       ),
     ),

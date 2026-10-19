@@ -14,6 +14,7 @@ import '../../shared/state.dart';
 import '../../shared/theme.dart';
 import '../../shared/web/bridge.dart';
 import '../../shared/widgets.dart';
+import '../convert/recent_panel.dart';
 import 'ai_home_state.dart';
 import 'route_card.dart';
 
@@ -156,14 +157,65 @@ class _AiHomePageState extends ConsumerState<AiHomePage> {
     return KeyEventResult.ignored;
   }
 
+  Widget _header(AppText t, AppFrame frame) {
+    final hint = t.s(
+      '"이 한글 파일 PDF로 바꿔줘"처럼 말하거나 파일을 넣어 보세요. 알맞은 메뉴로 안내합니다.',
+      'Say something like "Convert this Hangul file to PDF" or add a file. We will guide you to the right menu.',
+      '「このハングルファイルをPDFに変換して」のように話すか、ファイルを入れてください。適切なメニューへご案内します。',
+    );
+    final title = Text(
+      t.groupHome,
+      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.ink),
+    );
+    if (frame == AppFrame.phonePortrait) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          const Foldy(pose: FoldyPose.wave, size: 56),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SpeechBubble(
+              child: Text(hint, style: const TextStyle(fontWeight: FontWeight.w600, height: 1.35)),
+            ),
+          ),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title,
+              const SizedBox(height: 10),
+              SpeechBubble(
+                tailRight: true,
+                child: Text(hint, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, height: 1.4)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Foldy(pose: FoldyPose.wave, size: 104),
+      ],
+    );
+  }
+
+  Widget _dropZone({required bool compact}) =>
+      UploadDropZone(onTap: _sending ? null : _pick, compact: compact, caption: knownExts.map((e) => e.toUpperCase()).join(' · '));
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(textProvider);
     final draft = ref.watch(aiDraftProvider);
-    final desktop = frameOf(MediaQuery.sizeOf(context)) == AppFrame.desktop;
+    final frame = frameOf(MediaQuery.sizeOf(context));
+    final desktop = frame == AppFrame.desktop;
+    final landscape = frame == AppFrame.phoneLandscape;
     final hint = t.s(
       '변환할 형식이나 궁금한 것을 말하거나 파일을 넣으세요.',
-      'Say the format you want or ask anything, or add a file.',
+      'Say the format you want, ask anything, or add a file.',
       '変換したい形式や知りたいことを話すか、ファイルを入れてください。',
     );
     final field = Focus(
@@ -171,8 +223,8 @@ class _AiHomePageState extends ConsumerState<AiHomePage> {
       child: TextField(
         controller: _text,
         focusNode: _focus,
-        minLines: desktop ? 2 : 1,
-        maxLines: desktop ? 5 : 1,
+        minLines: 1,
+        maxLines: desktop ? 4 : 2,
         maxLength: 4000,
         buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
         onChanged: (v) => ref.read(aiDraftProvider.notifier).setText(v, voice: false),
@@ -187,47 +239,52 @@ class _AiHomePageState extends ConsumerState<AiHomePage> {
     final attachBtn = IconButton(
       tooltip: t.s('파일 첨부', 'Attach file', 'ファイル添付'),
       onPressed: _sending ? null : _pick,
-      icon: const Icon(Icons.attach_file),
+      icon: const Icon(Icons.note_add_outlined),
     );
     final micBtn = speechSupported()
         ? IconButton(
             tooltip: t.s('음성 입력', 'Voice input', '音声入力'),
             onPressed: _sending ? null : _toggleVoice,
-            icon: Icon(_listening ? Icons.mic : Icons.mic_none, color: _listening ? AppColors.danger : null),
+            icon: Icon(_listening ? Icons.mic : Icons.mic_none_rounded, color: _listening ? AppColors.danger : null),
           )
         : const SizedBox.shrink();
     final sendBtn = IconButton.filled(
       tooltip: t.s('실행', 'Send', '実行'),
+      style: IconButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        fixedSize: const Size(44, 44),
+      ),
       onPressed: _sending ? null : _send,
       icon: _sending
           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-          : const Icon(Icons.arrow_upward),
+          : const Icon(Icons.send_rounded, size: 20),
     );
     final input = PaperCard(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (desktop) ...[
-            field,
-            Row(children: [attachBtn, micBtn, const Spacer(), sendBtn]),
-          ] else
-            Row(
-              children: [
-                attachBtn,
-                Expanded(child: field),
-                micBtn,
-                sendBtn,
-              ],
-            ),
+          Row(
+            children: [
+              Expanded(child: field),
+              micBtn,
+              attachBtn,
+              const SizedBox(width: 4),
+              sendBtn,
+            ],
+          ),
           if (draft.file != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FormatPill(
-                '${draft.file!.name} · ${t.size(draft.file!.size)}',
-                ext: draft.file!.ext,
-                trailing: Icons.close,
-                onTap: _sending ? null : () => ref.read(aiDraftProvider.notifier).setFile(null),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FormatPill(
+                  '${draft.file!.name} · ${t.size(draft.file!.size)}',
+                  ext: draft.file!.ext,
+                  trailing: Icons.close,
+                  onTap: _sending ? null : () => ref.read(aiDraftProvider.notifier).setFile(null),
+                ),
               ),
             ),
           if (_progress != null) ...[
@@ -243,39 +300,57 @@ class _AiHomePageState extends ConsumerState<AiHomePage> {
         ],
       ),
     );
-    return PageBody(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          input,
-          const SizedBox(height: 8),
-          Text(t.aiNotice, style: const TextStyle(color: AppColors.sub, fontSize: 12)),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ActionChip(
-                label: Text(t.s('이 파일 PDF로 바꿔줘', 'Convert this file to PDF', 'このファイルをPDFに変換して')),
-                onPressed: _sending ? null : () => _preset(t.s('이 파일 PDF로 바꿔줘', 'Convert this file to PDF', 'このファイルをPDFに変換して')),
-              ),
-              ActionChip(
-                label: Text(t.s('이 문서 3줄로 요약해줘', 'Summarize this document in 3 lines', 'この文書を3行で要約して')),
-                onPressed: _sending ? null : () => _preset(t.s('이 문서 3줄로 요약해줘', 'Summarize this document in 3 lines', 'この文書を3行で要約して')),
-              ),
-              ActionChip(
-                label: Text(t.s('100달러는 몇 원이야?', 'How many won is 100 dollars?', '100ドルは何ウォン?')),
-                onPressed: () {
-                  ref.read(calcHandoffProvider.notifier).set(const CalcHandoff(tab: CalcTab.fx, input: '100', currency: 'USD'));
-                  ref.read(navProvider.notifier).calc(CalcTab.fx);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          const TurnList(),
-        ],
-      ),
+    final toPdf = t.s('이 파일 PDF로 바꿔줘', 'Convert this file to PDF', 'このファイルをPDFに変換して');
+    final summary = t.s('이 문서 3줄로 요약해줘', 'Summarize this document in 3 lines', 'この文書を3行で要約して');
+    final presets = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        PresetPill(label: toPdf, onTap: _sending ? null : () => _preset(toPdf)),
+        PresetPill(label: summary, onTap: _sending ? null : () => _preset(summary)),
+        PresetPill(
+          label: t.s('100달러는 몇 원이야?', 'How many won is 100 dollars?', '100ドルは何ウォン?'),
+          onTap: () {
+            ref.read(calcHandoffProvider.notifier).set(const CalcHandoff(tab: CalcTab.fx, input: '100', currency: 'USD'));
+            ref.read(navProvider.notifier).calc(CalcTab.fx);
+          },
+        ),
+      ],
+    );
+    final main = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!landscape) ...[_header(t, frame), const SizedBox(height: 14), _dropZone(compact: !desktop), const SizedBox(height: 12)],
+        input,
+        const SizedBox(height: 8),
+        Text(t.aiNotice, style: const TextStyle(color: AppColors.sub, fontSize: 12)),
+        const SizedBox(height: 12),
+        presets,
+        const SizedBox(height: 20),
+        const TurnList(),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, c) {
+        final side = c.maxWidth >= 980;
+        return PageBody(
+          padding: EdgeInsets.fromLTRB(landscape ? 12 : 20, landscape ? 10 : 20, landscape ? 12 : 20, 20),
+          maxWidth: side ? AppDims.contentMax + AppDims.recentPanel : AppDims.contentMax,
+          child: side
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: main),
+                    const SizedBox(width: 20),
+                    const SizedBox(width: AppDims.recentPanel, child: RecentConversionsPanel()),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [main, const SizedBox(height: 8), const RecentConversionsPanel(limit: 3)],
+                ),
+        );
+      },
     );
   }
 }
@@ -385,11 +460,13 @@ class _TurnListState extends ConsumerState<TurnList> {
           )
         else if (turns.isEmpty)
           EmptyState(
-            t.s(
-              '"이 한글 파일 PDF로 바꿔줘"처럼 말하거나 파일을 넣어 보세요. 알맞은 메뉴로 안내합니다.',
-              'Say something like "Convert this Hangul file to PDF" or add a file. We will guide you to the right menu.',
-              '「このハングルファイルをPDFに変換して」のように話すか、ファイルを入れてください。適切なメニューへご案内します。',
-            ),
+            frameOf(MediaQuery.sizeOf(context)) == AppFrame.phoneLandscape
+                ? t.s(
+                    '"이 한글 파일 PDF로 바꿔줘"처럼 말하거나 파일을 넣어 보세요. 알맞은 메뉴로 안내합니다.',
+                    'Say something like "Convert this Hangul file to PDF" or add a file. We will guide you to the right menu.',
+                    '「このハングルファイルをPDFに変換して」のように話すか、ファイルを入れてください。適切なメニューへご案内します。',
+                  )
+                : t.s('대화와 안내가 여기에 쌓입니다.', 'Your chat and guidance will appear here.', '会話と案内がここに表示されます。'),
           )
         else ...[
           for (final x in turns) _turn(t, x, backup),
@@ -410,34 +487,42 @@ class _TurnListState extends ConsumerState<TurnList> {
 
   Widget _bubble({required String key, required Color color, required Widget child, required bool backup, required bool alignRight}) {
     final t = ref.read(textProvider);
-    return Align(
-      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: cardDecoration(color: color),
-          padding: const EdgeInsets.fromLTRB(4, 6, 14, 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!backup)
-                Semantics(
-                  label: t.select,
-                  child: Checkbox(
-                    value: _checked.contains(key),
-                    onChanged: (v) => setState(() => v == true ? _checked.add(key) : _checked.remove(key)),
-                  ),
-                )
-              else
-                const SizedBox(width: 10),
-              Expanded(
-                child: Padding(padding: const EdgeInsets.only(top: 10), child: child),
-              ),
-            ],
-          ),
+    final bubble = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: cardDecoration(color: color),
+        padding: const EdgeInsets.fromLTRB(4, 6, 14, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!backup)
+              Semantics(
+                label: t.select,
+                child: Checkbox(
+                  value: _checked.contains(key),
+                  onChanged: (v) => setState(() => v == true ? _checked.add(key) : _checked.remove(key)),
+                ),
+              )
+            else
+              const SizedBox(width: 10),
+            Expanded(
+              child: Padding(padding: const EdgeInsets.only(top: 10), child: child),
+            ),
+          ],
         ),
       ),
+    );
+    if (alignRight) return Align(alignment: Alignment.centerRight, child: bubble);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 2, right: 6),
+          child: Foldy(pose: FoldyPose.head, size: 34),
+        ),
+        Flexible(child: bubble),
+      ],
     );
   }
 

@@ -12,11 +12,33 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="ConvertFile">
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-180.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png">
 
   <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+  <meta name="msapplication-TileColor" content="#EEF1F6">
+  <meta name="msapplication-TileImage" content="icons/mstile-150x150.png">
+  <meta name="msapplication-config" content="browserconfig.xml">
+
+  <style>
+    #cf-intro { position: fixed; inset: 0; z-index: 2147483000; background: #EEF1F6; display: flex; align-items: center;
+      justify-content: center; transition: opacity .45s ease; }
+    #cf-intro.cf-hide { opacity: 0; pointer-events: none; }
+    #cf-intro video { width: 100%; height: 100%; object-fit: contain; }
+    #cf-intro button { position: absolute; top: calc(12px + env(safe-area-inset-top)); border: 1.5px solid #1F2A4D;
+      background: rgba(255, 255, 255, .92); color: #1F2A4D; cursor: pointer; font: 700 14px system-ui, sans-serif;
+      box-shadow: 0 3px 10px rgba(31, 42, 77, .15); }
+    #cf-intro-sound { left: calc(12px + env(safe-area-inset-left)); width: 36px; height: 36px; border-radius: 50%;
+      padding: 0; display: flex; align-items: center; justify-content: center; }
+    #cf-intro-skip { right: calc(12px + env(safe-area-inset-right)); height: 36px; padding: 0 16px; border-radius: 18px; }
+    #cf-intro-sound .on { display: none; }
+    #cf-intro-sound[aria-pressed="true"] .on { display: block; }
+    #cf-intro-sound[aria-pressed="true"] .off { display: none; }
+  </style>
 
   <title>ConvertFile</title>
   <link rel="manifest" href="manifest.json">
@@ -50,6 +72,66 @@
   <script src="js/cf_helpers.js" defer></script>
 </head>
 <body style="background:#EEF1F6">
+  <div id="cf-intro" hidden>
+    <video id="cf-intro-video" src="intro/intro.mp4" muted playsinline preload="auto"></video>
+    <button id="cf-intro-sound" type="button" aria-pressed="false">
+      <svg class="off" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.6 3 2.7-2.7-1.4-1.4-2.7 2.7-2.7-2.7-1.4 1.4 2.7 2.7-2.7 2.7 1.4 1.4 2.7-2.7 2.7 2.7 1.4-1.4L16.6 12z"/></svg>
+      <svg class="on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
+    </button>
+    <button id="cf-intro-skip" type="button"></button>
+  </div>
+  <script>
+    // Intro video once per browser session. Starts muted (autoplay rule); the top-left button turns sound on.
+    (function () {
+      var KEY = 'cf.introSeen';
+      var box = document.getElementById('cf-intro');
+      var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      try { if (sessionStorage.getItem(KEY)) return; sessionStorage.setItem(KEY, '1'); } catch (e) { return; }
+      if (reduce) return;
+      var lang = 'ko';
+      try {
+        var raw = localStorage.getItem('flutter.locale');
+        lang = raw ? JSON.parse(raw) : (navigator.language || 'ko').slice(0, 2);
+      } catch (e) {}
+      var text = {
+        ko: { skip: '건너뛰기', on: '소리 켜기', off: '소리 끄기' },
+        en: { skip: 'Skip', on: 'Turn sound on', off: 'Turn sound off' },
+        ja: { skip: 'スキップ', on: '音をオン', off: '音をオフ' }
+      }[lang] || null;
+      text = text || { skip: '건너뛰기', on: '소리 켜기', off: '소리 끄기' };
+      var video = document.getElementById('cf-intro-video');
+      var sound = document.getElementById('cf-intro-sound');
+      var skip = document.getElementById('cf-intro-skip');
+      var done = false;
+      function label() {
+        var on = !video.muted;
+        sound.setAttribute('aria-pressed', on ? 'true' : 'false');
+        sound.setAttribute('aria-label', on ? text.off : text.on);
+        sound.title = on ? text.off : text.on;
+      }
+      function close() {
+        if (done) return;
+        done = true;
+        box.classList.add('cf-hide');
+        try { video.pause(); } catch (e) {}
+        setTimeout(function () { box.remove(); }, 500);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      skip.textContent = text.skip;
+      video.muted = true;
+      label();
+      box.hidden = false;
+      sound.addEventListener('click', function () { video.muted = !video.muted; label(); });
+      skip.addEventListener('click', close);
+      document.addEventListener('keydown', onKey);
+      video.addEventListener('ended', close);
+      video.addEventListener('error', close);
+      setTimeout(close, 30000);
+      var p = video.play();
+      if (p && p.catch) p.catch(close);
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

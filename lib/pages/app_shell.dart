@@ -81,7 +81,10 @@ class GroupTabsBar extends ConsumerWidget {
     decoration: BoxDecoration(
       color: tab.selected ? AppColors.primary : AppColors.paper,
       borderRadius: BorderRadius.circular(99),
-      border: Border.all(color: AppColors.ink, width: 1.4),
+      border: Border.all(color: AppColors.ink, width: 1.3),
+      boxShadow: tab.selected
+          ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), offset: const Offset(0, 3), blurRadius: 8)]
+          : null,
     ),
     child: Semantics(
       button: true,
@@ -149,46 +152,80 @@ class HeaderActions extends ConsumerWidget {
     final t = ref.watch(textProvider);
     final lang = ref.watch(langProvider);
     final user = ref.watch(authUserProvider).value;
-    final gap = SizedBox(width: dense ? 4 : 8);
-    final pad = EdgeInsets.symmetric(horizontal: dense ? 8 : 12, vertical: dense ? 6 : 10);
+    final gap = SizedBox(width: dense ? 6 : 10);
+    final pad = EdgeInsets.symmetric(horizontal: dense ? 10 : 14, vertical: dense ? 6 : 9);
+    final pill = OutlinedButton.styleFrom(
+      padding: pad,
+      minimumSize: Size(dense ? 36 : 40, dense ? 36 : 40),
+      backgroundColor: AppColors.paper,
+      shape: pillBorder,
+      side: const BorderSide(color: AppColors.ink, width: 1.3),
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Tooltip(
           message: t.language,
-          child: OutlinedButton(
-            style: OutlinedButton.styleFrom(padding: pad, minimumSize: Size.zero),
+          child: OutlinedButton.icon(
+            style: pill,
             onPressed: () => ref.read(langProvider.notifier).cycle(),
-            child: Text(lang.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            icon: Icon(Icons.language_rounded, size: dense ? 16 : 18),
+            label: Text(lang.label, style: const TextStyle(fontWeight: FontWeight.w800)),
           ),
         ),
         gap,
         Tooltip(
           message: t.calculator,
           child: OutlinedButton(
-            style: OutlinedButton.styleFrom(padding: pad, minimumSize: Size.zero),
+            style: pill.copyWith(padding: WidgetStatePropertyAll(EdgeInsets.all(dense ? 6 : 8))),
             onPressed: () => ref.read(calcPopupProvider.notifier).toggle(),
-            child: Icon(Icons.calculate_outlined, size: 20, semanticLabel: t.calculator),
+            child: Icon(Icons.calculate_outlined, size: dense ? 18 : 20, semanticLabel: t.calculator),
           ),
         ),
         gap,
         Semantics(
           button: true,
           label: t.myPage,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => ref.read(navProvider.notifier).openMyPage(),
-            child: UserAvatar(user: user, radius: dense ? 15 : 18),
-          ),
+          child: dense
+              ? InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => ref.read(navProvider.notifier).openMyPage(),
+                  child: UserAvatar(user: user, radius: 15),
+                )
+              : Material(
+                  color: AppColors.paper,
+                  shape: pillBorder,
+                  child: InkWell(
+                    customBorder: pillBorder,
+                    onTap: () => ref.read(navProvider.notifier).openMyPage(),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 14, 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          UserAvatar(user: user, radius: 15),
+                          const SizedBox(width: 8),
+                          ExcludeSemantics(
+                            child: Text(
+                              t.myPage,
+                              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
         ),
         gap,
         if (compactLogout)
-          IconButton(tooltip: t.logout, onPressed: () => logoutFlow(context, ref), icon: const Icon(Icons.logout))
+          IconButton(tooltip: t.logout, onPressed: () => logoutFlow(context, ref), icon: const Icon(Icons.logout_rounded))
         else
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(padding: pad, minimumSize: Size.zero),
+          TextButton.icon(
+            style: TextButton.styleFrom(padding: pad, minimumSize: Size.zero),
             onPressed: () => logoutFlow(context, ref),
-            child: Text(t.logout),
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            label: Text(t.logout),
           ),
       ],
     );
