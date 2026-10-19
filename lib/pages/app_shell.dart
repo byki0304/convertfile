@@ -147,7 +147,7 @@ class HeaderActions extends ConsumerWidget {
           child: OutlinedButton(
             style: OutlinedButton.styleFrom(padding: pad, minimumSize: Size.zero),
             onPressed: () => ref.read(calcPopupProvider.notifier).toggle(),
-            child: const Icon(Icons.calculate_outlined, size: 20),
+            child: Icon(Icons.calculate_outlined, size: 20, semanticLabel: t.calculator),
           ),
         ),
         gap,

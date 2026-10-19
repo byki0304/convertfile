@@ -78,7 +78,7 @@ class _FxTabState extends ConsumerState<FxTab> {
     final v = double.tryParse(_foreign.text.replaceAll(',', ''));
     final r = _rate;
     if (v == null || r == null) return;
-    _krw.text = (v * r).toStringAsFixed(0);
+    _krw.text = ref.read(textProvider).number(v * r);
     setState(() {});
   }
 
@@ -86,7 +86,7 @@ class _FxTabState extends ConsumerState<FxTab> {
     final v = double.tryParse(_krw.text.replaceAll(',', ''));
     final r = _rate;
     if (v == null || r == null || r == 0) return;
-    _foreign.text = (v / r).toStringAsFixed(2);
+    _foreign.text = ref.read(textProvider).number(v / r, decimals: 2);
     setState(() {});
   }
 
