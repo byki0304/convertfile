@@ -1,0 +1,497 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../shared/api.dart';
+import '../../shared/app_text.dart';
+import '../../shared/errors.dart';
+import '../../shared/file_rules.dart';
+import '../../shared/logic/frame.dart';
+import '../../shared/state.dart';
+import '../../shared/theme.dart';
+import '../../shared/web/bridge.dart';
+import '../../shared/widgets.dart';
+import 'ai_home_state.dart';
+import 'route_card.dart';
+
+String speechLang(AppLang l) => switch (l) {
+  AppLang.ko => 'ko-KR',
+  AppLang.en => 'en-US',
+  AppLang.ja => 'ja-JP',
+};
+
+/// Menu 1. Input card, presets, and the conversation list.
+class AiHomePage extends ConsumerStatefulWidget {
+  const AiHomePage({super.key});
+
+  @override
+  ConsumerState<AiHomePage> createState() => _AiHomePageState();
+}
+
+class _AiHomePageState extends ConsumerState<AiHomePage> {
+  late final TextEditingController _text;
+  final _focus = FocusNode();
+  bool _sending = false;
+  bool _listening = false;
+  int? _progress;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _text = TextEditingController(text: ref.read(aiDraftProvider).text);
+    setDropHandler((files) {
+      if (files.isNotEmpty) _attach(files.first);
+    });
+  }
+
+  @override
+  void dispose() {
+    setDropHandler(null);
+    if (_listening) speechStop();
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _attach(PickedFile f) {
+    final t = ref.read(textProvider);
+    final guest = ref.read(isGuestProvider);
+    if (!knownExts.contains(f.ext)) {
+      setState(() => _error = unsupportedFormat(t, knownExts.toList()));
+      return;
+    }
+    if (f.size > Limits.fileBytes(guest)) {
+      setState(() => _error = fileTooLarge(t, guest));
+      return;
+    }
+    ref.read(aiDraftProvider.notifier).setFile(f);
+    setState(() => _error = null);
+  }
+
+  Future<bool> _pick() async {
+    final files = await pickFiles(accept: knownExts.map((e) => '.$e').join(','));
+    if (files.isEmpty) return false;
+    _attach(files.first);
+    return ref.read(aiDraftProvider).file != null;
+  }
+
+  void _toggleVoice() {
+    if (_listening) {
+      speechStop();
+      return;
+    }
+    final ok = speechStart(speechLang(ref.read(langProvider)), (s) {
+      _text.text = s;
+      ref.read(aiDraftProvider.notifier).setText(s, voice: true);
+    }, () => mounted ? setState(() => _listening = false) : null);
+    setState(() => _listening = ok);
+  }
+
+  Future<void> _send() async {
+    final t = ref.read(textProvider);
+    final draft = ref.read(aiDraftProvider);
+    final text = _text.text.trim();
+    if (_sending) return;
+    if (text.isEmpty && draft.file == null) {
+      setState(() => _error = t.s('내용을 입력하거나 파일을 선택해 주세요.', 'Enter a message or choose a file.', '内容を入力するか、ファイルを選択してください。'));
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+      _progress = null;
+    });
+    try {
+      final data = <String, dynamic>{'text': text, 'isVoice': draft.isVoice, 'lang': ref.read(langProvider).code};
+      final file = draft.file;
+      if (file != null) {
+        final uid = ref.read(uidProvider)!;
+        final task = Api.upload(uid, file);
+        final sub = task.snapshotEvents.listen((s) {
+          if (s.totalBytes > 0 && mounted) setState(() => _progress = (s.bytesTransferred * 100 / s.totalBytes).floor());
+        }, onError: (_) {});
+        try {
+          final snap = await task;
+          data['filePath'] = snap.ref.fullPath;
+          data['fileName'] = file.name;
+        } finally {
+          await sub.cancel();
+        }
+      }
+      final r = await Api.call('submitPrompt', data);
+      final turnId = r['turnId'] as String?;
+      if (turnId != null && file != null) ref.read(turnFilesProvider.notifier).put(turnId, file);
+      _text.clear();
+      ref.read(aiDraftProvider.notifier).clear();
+    } on ApiException catch (e) {
+      setState(() => _error = errorMessage(t, e.code, guest: ref.read(isGuestProvider)));
+    } catch (_) {
+      setState(() => _error = genericError(t));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _progress = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _preset(String text, {bool needsFile = true}) async {
+    if (needsFile && ref.read(aiDraftProvider).file == null && !await _pick()) return;
+    _text.text = text;
+    ref.read(aiDraftProvider.notifier).setText(text, voice: false);
+    await _send();
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.enter && !HardwareKeyboard.instance.isShiftPressed) {
+      _send();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(textProvider);
+    final draft = ref.watch(aiDraftProvider);
+    final desktop = frameOf(MediaQuery.sizeOf(context)) == AppFrame.desktop;
+    final hint = t.s(
+      '변환할 형식이나 궁금한 것을 말하거나 파일을 넣으세요.',
+      'Say the format you want or ask anything, or add a file.',
+      '変換したい形式や知りたいことを話すか、ファイルを入れてください。',
+    );
+    final field = Focus(
+      onKeyEvent: _onKey,
+      child: TextField(
+        controller: _text,
+        focusNode: _focus,
+        minLines: desktop ? 2 : 1,
+        maxLines: desktop ? 5 : 1,
+        maxLength: 4000,
+        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+        onChanged: (v) => ref.read(aiDraftProvider.notifier).setText(v, voice: false),
+        decoration: InputDecoration(
+          hintText: hint,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+      ),
+    );
+    final attachBtn = IconButton(
+      tooltip: t.s('파일 첨부', 'Attach file', 'ファイル添付'),
+      onPressed: _sending ? null : _pick,
+      icon: const Icon(Icons.attach_file),
+    );
+    final micBtn = speechSupported()
+        ? IconButton(
+            tooltip: t.s('음성 입력', 'Voice input', '音声入力'),
+            onPressed: _sending ? null : _toggleVoice,
+            icon: Icon(_listening ? Icons.mic : Icons.mic_none, color: _listening ? AppColors.danger : null),
+          )
+        : const SizedBox.shrink();
+    final sendBtn = IconButton.filled(
+      tooltip: t.s('실행', 'Send', '実行'),
+      onPressed: _sending ? null : _send,
+      icon: _sending
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.arrow_upward),
+    );
+    final input = PaperCard(
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (desktop) ...[
+            field,
+            Row(children: [attachBtn, micBtn, const Spacer(), sendBtn]),
+          ] else
+            Row(
+              children: [
+                attachBtn,
+                Expanded(child: field),
+                micBtn,
+                sendBtn,
+              ],
+            ),
+          if (draft.file != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FormatPill(
+                '${draft.file!.name} · ${t.size(draft.file!.size)}',
+                ext: draft.file!.ext,
+                trailing: Icons.close,
+                onTap: _sending ? null : () => ref.read(aiDraftProvider.notifier).setFile(null),
+              ),
+            ),
+          if (_progress != null) ...[
+            const SizedBox(height: 6),
+            LinearProgressIndicator(value: _progress! / 100),
+            Text(t.uploading(_progress!), style: const TextStyle(fontSize: 12, color: AppColors.sub)),
+          ],
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(_error!, style: const TextStyle(color: AppColors.danger)),
+            ),
+        ],
+      ),
+    );
+    return PageBody(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          input,
+          const SizedBox(height: 8),
+          Text(t.aiNotice, style: const TextStyle(color: AppColors.sub, fontSize: 12)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ActionChip(
+                label: Text(t.s('이 파일 PDF로 바꿔줘', 'Convert this file to PDF', 'このファイルをPDFに変換して')),
+                onPressed: _sending ? null : () => _preset(t.s('이 파일 PDF로 바꿔줘', 'Convert this file to PDF', 'このファイルをPDFに変換して')),
+              ),
+              ActionChip(
+                label: Text(t.s('이 문서 3줄로 요약해줘', 'Summarize this document in 3 lines', 'この文書を3行で要約して')),
+                onPressed: _sending ? null : () => _preset(t.s('이 문서 3줄로 요약해줘', 'Summarize this document in 3 lines', 'この文書を3行で要約して')),
+              ),
+              ActionChip(
+                label: Text(t.s('100달러는 몇 원이야?', 'How many won is 100 dollars?', '100ドルは何ウォン?')),
+                onPressed: () {
+                  ref.read(calcHandoffProvider.notifier).set(const CalcHandoff(tab: CalcTab.fx, input: '100', currency: 'USD'));
+                  ref.read(navProvider.notifier).calc(CalcTab.fx);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const TurnList(),
+        ],
+      ),
+    );
+  }
+}
+
+class TurnList extends ConsumerStatefulWidget {
+  const TurnList({super.key});
+
+  @override
+  ConsumerState<TurnList> createState() => _TurnListState();
+}
+
+class _TurnListState extends ConsumerState<TurnList> {
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
+  String? _uid;
+  List<Turn>? _turns;
+  int _limit = 30;
+  final Set<String> _checked = {};
+  bool _deleting = false;
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _listen(String uid) {
+    _sub?.cancel();
+    _uid = uid;
+    _sub = Api.turns(uid).orderBy('createdAt', descending: true).limit(_limit).snapshots().listen((s) {
+      ref.read(backupModeProvider.notifier).set(false);
+      _apply([for (final d in s.docs) Turn(d.id, d.data())]);
+    }, onError: (_) => _loadBackup());
+  }
+
+  Future<void> _loadBackup() async {
+    ref.read(backupModeProvider.notifier).set(true);
+    try {
+      final r = await Api.call('readBackup', {'collection': 'turns'});
+      final docs = (r['docs'] as List? ?? []).map((e) => Map<String, dynamic>.from(e as Map));
+      final list = [for (final d in docs) Turn(d['id'] as String, d)]
+        ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      _apply(list);
+    } catch (_) {
+      _apply(const []);
+    }
+  }
+
+  void _apply(List<Turn> all) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    setState(() {
+      _turns = all.where((x) => !x.expiredAt(now) && !(x.userHidden && x.aiHidden)).toList();
+      final keys = {
+        for (final x in _turns!) ...['${x.id}:user', '${x.id}:ai'],
+      };
+      _checked.retainAll(keys);
+    });
+  }
+
+  Future<void> _delete() async {
+    final t = ref.read(textProvider);
+    if (!await confirmDialog(context, t, t.deleteConfirm(_checked.length), confirmLabel: t.delete, danger: true)) return;
+    setState(() => _deleting = true);
+    try {
+      final parts = [
+        for (final k in _checked) {'turnId': k.split(':').first, 'part': k.split(':').last},
+      ];
+      await Api.call('hideTurnParts', {'parts': parts});
+      setState(_checked.clear);
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, errorMessage(t, e.code));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(textProvider);
+    final uid = ref.watch(uidProvider);
+    if (uid != null && uid != _uid) _listen(uid);
+    final turns = _turns;
+    final backup = ref.watch(backupModeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionTitle(
+          t.s('대화 & 안내', 'Chat & guidance', '会話と案内'),
+          trailing: (turns?.isNotEmpty ?? false) && !backup
+              ? SelectionToggleButton(
+                  selectedCount: _checked.length,
+                  busy: _deleting,
+                  onSelectAll: () => setState(() {
+                    for (final x in turns!) {
+                      if (!x.userHidden) _checked.add('${x.id}:user');
+                      if (!x.aiHidden) _checked.add('${x.id}:ai');
+                    }
+                  }),
+                  onDelete: _delete,
+                )
+              : null,
+        ),
+        if (turns == null)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (turns.isEmpty)
+          EmptyState(
+            t.s(
+              '"이 한글 파일 PDF로 바꿔줘"처럼 말하거나 파일을 넣어 보세요. 알맞은 메뉴로 안내합니다.',
+              'Say something like "Convert this Hangul file to PDF" or add a file. We will guide you to the right menu.',
+              '「このハングルファイルをPDFに変換して」のように話すか、ファイルを入れてください。適切なメニューへご案内します。',
+            ),
+          )
+        else ...[
+          for (final x in turns) _turn(t, x, backup),
+          if (turns.length >= _limit)
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  _limit += 30;
+                  if (_uid != null) _listen(_uid!);
+                },
+                child: Text(t.s('더 보기', 'Show more', 'もっと見る')),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _bubble({required String key, required Color color, required Widget child, required bool backup, required bool alignRight}) {
+    final t = ref.read(textProvider);
+    return Align(
+      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: cardDecoration(color: color),
+          padding: const EdgeInsets.fromLTRB(4, 6, 14, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!backup)
+                Semantics(
+                  label: t.select,
+                  child: Checkbox(
+                    value: _checked.contains(key),
+                    onChanged: (v) => setState(() => v == true ? _checked.add(key) : _checked.remove(key)),
+                  ),
+                )
+              else
+                const SizedBox(width: 10),
+              Expanded(
+                child: Padding(padding: const EdgeInsets.only(top: 10), child: child),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _turn(AppText t, Turn x, bool backup) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!x.userHidden)
+            _bubble(
+              key: '${x.id}:user',
+              color: AppColors.paper,
+              backup: backup,
+              alignRight: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (x.userText.isNotEmpty)
+                    Row(
+                      children: [
+                        if (x.isVoice)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 4),
+                            child: Icon(Icons.mic, size: 16, color: AppColors.sub),
+                          ),
+                        Expanded(child: SelectableText(x.userText)),
+                      ],
+                    ),
+                  if (x.fileName != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: FormatPill(x.fileName!, ext: extOf(x.fileName!)),
+                    ),
+                ],
+              ),
+            ),
+          if (!x.aiHidden)
+            _bubble(
+              key: '${x.id}:ai',
+              color: AppColors.aiBubble,
+              backup: backup,
+              alignRight: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (x.aiText.isNotEmpty) SelectableText(x.aiText),
+                  for (final l in x.summaryLines) Text('• $l'),
+                  if (x.routeCard != null && !backup) RouteCard(turn: x),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="ConvertFile - AI 문서 변환 작업대">
+  <meta name="theme-color" content="#2F4AA8">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ConvertFile">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+
+  <title>ConvertFile</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script>
+    // No service worker: remove any old worker and caches, then reload once.
+    (function () {
+      var KEY = 'cf.swCleaned';
+      var jobs = [];
+      if ('serviceWorker' in navigator) {
+        jobs.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+          return Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () { return regs.length > 0; });
+        }));
+      }
+      if (window.caches && caches.keys) {
+        jobs.push(caches.keys().then(function (keys) {
+          return Promise.all(keys.map(function (k) { return caches.delete(k); })).then(function () { return keys.length > 0; });
+        }));
+      }
+      Promise.all(jobs).then(function (found) {
+        var any = found.some(Boolean);
+        if (any && !sessionStorage.getItem(KEY)) {
+          sessionStorage.setItem(KEY, '1');
+          location.reload();
+        }
+      }).catch(function () {});
+    })();
+  </script>
+  <script src="js/pdf-lib.min.js" defer></script>
+  <script src="js/pdf_tools.js" defer></script>
+  <script src="js/cf_helpers.js" defer></script>
+</head>
+<body style="background:#EEF1F6">
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

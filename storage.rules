@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Clients may only upload their own source files. Downloads use 10-minute signed URLs from getDownloadUrl.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAnon() {
+      return request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function sizeOk() {
+      return request.resource.size > 0
+        && request.resource.size <= (isAnon() ? 100 * 1024 * 1024 : 1024 * 1024 * 1024);
+    }
+
+    function typeOk() {
+      return request.resource.contentType in [
+        'text/markdown',
+        'text/plain',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/x-hwp',
+        'application/hwp+zip'
+      ];
+    }
+
+    match /uploads/{uid}/{fileName} {
+      allow create: if request.auth != null && request.auth.uid == uid && sizeOk() && typeOk();
+      allow read, update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
