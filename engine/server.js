@@ -138,7 +138,7 @@ async function processJob(uid, conversionId) {
 }
 
 const server = http.createServer((req, res) => {
-  if (req.method === 'GET' && req.url === '/healthz') {
+  if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200).end('ok');
     return;
   }
