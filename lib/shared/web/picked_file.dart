@@ -1,6 +1,11 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+
 import '../file_rules.dart';
+
+/// True while files are dragged over the window and the current page accepts drops.
+final ValueNotifier<bool> fileDragActive = ValueNotifier(false);
 
 /// A file chosen by the user. [blob] is the browser File, uploaded as-is without reading it into memory.
 class PickedFile {

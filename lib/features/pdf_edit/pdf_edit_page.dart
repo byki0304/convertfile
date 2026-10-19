@@ -68,7 +68,7 @@ class _PdfEditPageState extends ConsumerState<PdfEditPage> {
     super.initState();
     _nav = ref.read(navProvider.notifier);
     _nav.leaveGuard = _confirmLeave;
-    setDropHandler((files) => files.isEmpty ? null : _openFile(files.first));
+    setDropHandler(this, (files) => files.isEmpty ? null : _openFile(files.first));
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final h = ref.read(pdfHandoffProvider);
       if (h == null || h.tab != PdfTab.edit) return;
@@ -81,7 +81,7 @@ class _PdfEditPageState extends ConsumerState<PdfEditPage> {
   @override
   void dispose() {
     if (_nav.leaveGuard == _confirmLeave) _nav.leaveGuard = null;
-    setDropHandler(null);
+    setDropHandler(this, null);
     super.dispose();
   }
 

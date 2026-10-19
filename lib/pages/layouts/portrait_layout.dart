@@ -6,7 +6,8 @@ import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../app_shell.dart';
 
-/// Header 56, tab chips below it, bottom tabs (hidden while the keyboard is up).
+/// Header 56 (logo, then language / calculator / my page / logout on the right), tab chips in two rows below it,
+/// bottom tabs (hidden while the keyboard is up).
 class PortraitLayout extends ConsumerWidget {
   const PortraitLayout({super.key, required this.body});
 
@@ -46,14 +47,11 @@ class PortraitLayout extends ConsumerWidget {
                       ),
                     ),
                     const Spacer(),
-                    Flexible(
-                      flex: 0,
-                      child: FittedBox(child: HeaderActions(dense: true, compactLogout: narrow)),
-                    ),
+                    const Flexible(flex: 0, child: FittedBox(child: HeaderActions(dense: true, compactLogout: true))),
                   ],
                 ),
               ),
-              const Align(alignment: Alignment.centerLeft, child: GroupTabsBar()),
+              const GroupTabsBar(twoRows: true),
               Expanded(child: body),
             ],
           ),

@@ -11,6 +11,9 @@ external JSPromise<web.FileList?> _pickFiles(String accept, bool multiple);
 @JS('cfSetDropHandler')
 external void _setDropHandler(JSFunction? fn);
 
+@JS('cfSetDragHoverHandler')
+external void _setDragHoverHandler(JSFunction? fn);
+
 @JS('cfDownloadBytes')
 external void _downloadBytes(JSUint8Array bytes, String name, String mime);
 
@@ -52,8 +55,25 @@ List<PickedFile> _list(web.FileList? list) {
 Future<List<PickedFile>> pickFiles({required String accept, bool multiple = false}) async =>
     _list(await _pickFiles(accept, multiple).toDart);
 
-void setDropHandler(void Function(List<PickedFile> files)? handler) {
-  _setDropHandler(handler == null ? null : ((web.FileList list) => handler(_list(list))).toJS);
+Object? _dropOwner;
+bool _hoverRegistered = false;
+
+/// Pages claim window-level file drops with themselves as [owner]. A null [handler] releases the claim only if
+/// [owner] still holds it, because the next page's initState runs before the previous page's dispose.
+void setDropHandler(Object owner, void Function(List<PickedFile> files)? handler) {
+  if (!_hoverRegistered) {
+    _hoverRegistered = true;
+    _setDragHoverHandler(((JSBoolean v) => fileDragActive.value = v.toDart).toJS);
+  }
+  if (handler == null) {
+    if (!identical(_dropOwner, owner)) return;
+    _dropOwner = null;
+    fileDragActive.value = false;
+    _setDropHandler(null);
+    return;
+  }
+  _dropOwner = owner;
+  _setDropHandler(((web.FileList list) => handler(_list(list))).toJS);
 }
 
 void downloadBytes(Uint8List bytes, String name, String mime) => _downloadBytes(bytes.toJS, name, mime);

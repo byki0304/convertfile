@@ -43,14 +43,14 @@ class _AiHomePageState extends ConsumerState<AiHomePage> {
   void initState() {
     super.initState();
     _text = TextEditingController(text: ref.read(aiDraftProvider).text);
-    setDropHandler((files) {
+    setDropHandler(this, (files) {
       if (files.isNotEmpty) _attach(files.first);
     });
   }
 
   @override
   void dispose() {
-    setDropHandler(null);
+    setDropHandler(this, null);
     if (_listening) speechStop();
     _text.dispose();
     _focus.dispose();

@@ -1,5 +1,8 @@
+import 'package:convertfile/features/account/account_actions.dart';
 import 'package:convertfile/features/calculator/popup/popup_calculator.dart';
 import 'package:convertfile/main.dart';
+import 'package:convertfile/pages/app_shell.dart';
+import 'package:convertfile/shared/file_rules.dart';
 import 'package:convertfile/shared/logic/frame.dart';
 import 'package:convertfile/shared/state.dart';
 import 'package:convertfile/shared/widgets.dart';
@@ -104,6 +107,30 @@ void main() {
     }
     await tester.pump();
     expect(c.read(basicCalcProvider).display, '12');
+  });
+
+  testWidgets('portrait tabs split into two rows and header buttons keep their order', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c = await _container();
+    c.read(navProvider.notifier).convert(TargetFormat.md);
+    await tester.pumpWidget(
+      _app(c, const Scaffold(body: Column(children: [HeaderActions(dense: true, compactLogout: true), GroupTabsBar(twoRows: true)]))),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    final t = c.read(textProvider);
+    double y(TargetFormat f) => tester.getCenter(find.text(formatTabLabel(t, f))).dy;
+    expect(y(TargetFormat.md), closeTo(y(TargetFormat.pptx), 0.5));
+    expect(y(TargetFormat.xlsx), greaterThan(y(TargetFormat.md) + 10));
+    expect(y(TargetFormat.xlsx), closeTo(y(TargetFormat.txt), 0.5));
+
+    double x(Finder f) => tester.getCenter(f).dx;
+    final order = [find.text('한국어'), find.byIcon(Icons.calculate_outlined), find.byType(UserAvatar), find.byIcon(Icons.logout)];
+    for (var i = 1; i < order.length; i++) {
+      expect(x(order[i]), greaterThan(x(order[i - 1])));
+    }
   });
 
   test('popup position is stored per frame', () async {

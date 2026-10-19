@@ -1,20 +1,68 @@
 // Small browser helpers called from Dart through dart:js_interop.
 (function () {
   let dropHandler = null;
+  let hoverHandler = null;
+  let depth = 0;
 
   window.cfSetDropHandler = function (fn) {
     dropHandler = fn || null;
   };
 
-  document.addEventListener('dragover', function (e) {
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = dropHandler ? 'copy' : 'none';
-  });
+  window.cfSetDragHoverHandler = function (fn) {
+    hoverHandler = fn || null;
+  };
 
-  document.addEventListener('drop', function (e) {
-    e.preventDefault();
-    if (dropHandler && e.dataTransfer && e.dataTransfer.files.length) dropHandler(e.dataTransfer.files);
-  });
+  const hasFiles = function (e) {
+    return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0);
+  };
+  const setHover = function (v) {
+    if (hoverHandler) hoverHandler(v);
+  };
+
+  // Capture phase so the Flutter view cannot swallow the events first.
+  document.addEventListener(
+    'dragenter',
+    function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (depth++ === 0 && dropHandler) setHover(true);
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'dragleave',
+    function (e) {
+      if (!hasFiles(e)) return;
+      if (--depth <= 0) {
+        depth = 0;
+        setHover(false);
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'dragover',
+    function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = dropHandler ? 'copy' : 'none';
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'drop',
+    function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setHover(false);
+      if (dropHandler && e.dataTransfer.files.length) dropHandler(e.dataTransfer.files);
+    },
+    true,
+  );
 
   // Resolves with a FileList, or null when the dialog is cancelled. Files are not read into memory.
   window.cfPickFiles = function (accept, multiple) {

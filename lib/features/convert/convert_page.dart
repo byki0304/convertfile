@@ -93,14 +93,14 @@ class _ConvertPageState extends ConsumerState<ConvertPage> {
         if (h.autoStart && _error == null) _start();
       }
     });
-    setDropHandler((files) {
+    setDropHandler(this, (files) {
       if (files.isNotEmpty) _select(files.first);
     });
   }
 
   @override
   void dispose() {
-    setDropHandler(null);
+    setDropHandler(this, null);
     super.dispose();
   }
 
@@ -166,27 +166,34 @@ class _ConvertPageState extends ConsumerState<ConvertPage> {
             child: InkWell(
               onTap: _pick,
               borderRadius: BorderRadius.circular(14),
-              child: Container(
-                height: 130,
-                decoration: BoxDecoration(
-                  color: AppColors.bg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.primary, width: 1.6),
-                ),
-                alignment: Alignment.center,
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.upload_file, size: 36, color: AppColors.primary),
-                    const SizedBox(height: 6),
-                    Text(
-                      desktop
-                          ? t.s('파일을 끌어다 놓거나 눌러서 고르세요', 'Drop a file here or click to choose', 'ファイルをドラッグするかクリックして選択')
-                          : t.s('눌러서 파일을 고르세요', 'Tap to choose a file', 'タップしてファイルを選択'),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+              child: ValueListenableBuilder<bool>(
+                valueListenable: fileDragActive,
+                builder: (context, dragging, _) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  height: 130,
+                  decoration: BoxDecoration(
+                    color: dragging ? AppColors.aiBubble : AppColors.bg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.primary, width: dragging ? 3 : 1.6),
+                  ),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(dragging ? Icons.file_download : Icons.upload_file, size: 36, color: AppColors.primary),
+                      const SizedBox(height: 6),
+                      Text(
+                        dragging
+                            ? t.s('여기에 놓으세요', 'Drop it here', 'ここにドロップ')
+                            : desktop
+                            ? t.s('파일을 끌어다 놓거나 눌러서 고르세요', 'Drop a file here or click to choose', 'ファイルをドラッグするかクリックして選択')
+                            : t.s('눌러서 파일을 고르세요', 'Tap to choose a file', 'タップしてファイルを選択'),
+                        textAlign: TextAlign.center,
+                        style: dragging ? const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary) : null,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

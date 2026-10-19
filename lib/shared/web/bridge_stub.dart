@@ -4,7 +4,7 @@ import 'picked_file.dart';
 
 Future<List<PickedFile>> pickFiles({required String accept, bool multiple = false}) async => const [];
 
-void setDropHandler(void Function(List<PickedFile> files)? handler) {}
+void setDropHandler(Object owner, void Function(List<PickedFile> files)? handler) {}
 
 void downloadBytes(Uint8List bytes, String name, String mime) {}
 

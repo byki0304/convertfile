@@ -68,55 +68,76 @@ List<TabItem> groupTabs(WidgetRef ref) {
   };
 }
 
-/// Horizontal tab chips; scrolls sideways when they do not fit.
+/// Tab chips. One row scrolls sideways when the chips do not fit; [twoRows] splits four or more tabs into two
+/// equal-width rows (portrait phones) so every tab stays visible.
 class GroupTabsBar extends ConsumerWidget {
-  const GroupTabsBar({super.key, this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 8)});
+  const GroupTabsBar({super.key, this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 8), this.twoRows = false});
 
   final EdgeInsets padding;
+  final bool twoRows;
+
+  Widget _chip(TabItem tab, {bool fill = false}) => AnimatedContainer(
+    duration: const Duration(milliseconds: 200),
+    decoration: BoxDecoration(
+      color: tab.selected ? AppColors.primary : AppColors.paper,
+      borderRadius: BorderRadius.circular(99),
+      border: Border.all(color: AppColors.ink, width: 1.4),
+    ),
+    child: Semantics(
+      button: true,
+      selected: tab.selected,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(99),
+        onTap: tab.onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: fill ? 6 : 14, vertical: 7),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              tab.label,
+              maxLines: 1,
+              style: TextStyle(fontWeight: FontWeight.w700, color: tab.selected ? Colors.white : AppColors.ink),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _fillRow(List<TabItem> tabs, int slots) => Row(
+    children: [
+      for (var i = 0; i < slots; i++) ...[
+        if (i > 0) const SizedBox(width: 8),
+        Expanded(child: i < tabs.length ? _chip(tabs[i], fill: true) : const SizedBox.shrink()),
+      ],
+    ],
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tabs = groupTabs(ref);
     if (tabs.isEmpty) return const SizedBox.shrink();
+    if (twoRows) {
+      if (tabs.length < 4) return Padding(padding: padding, child: _fillRow(tabs, tabs.length));
+      final perRow = (tabs.length + 1) ~/ 2;
+      return Padding(
+        padding: padding,
+        child: Column(
+          children: [_fillRow(tabs.sublist(0, perRow), perRow), const SizedBox(height: 8), _fillRow(tabs.sublist(perRow), perRow)],
+        ),
+      );
+    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: padding,
       child: Row(
-        children: [
-          for (final tab in tabs)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: tab.selected ? AppColors.primary : AppColors.paper,
-                  borderRadius: BorderRadius.circular(99),
-                  border: Border.all(color: AppColors.ink, width: 1.4),
-                ),
-                child: Semantics(
-                  button: true,
-                  selected: tab.selected,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(99),
-                    onTap: tab.onTap,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                      child: Text(
-                        tab.label,
-                        style: TextStyle(fontWeight: FontWeight.w700, color: tab.selected ? Colors.white : AppColors.ink),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
+        children: [for (final tab in tabs) Padding(padding: const EdgeInsets.only(right: 8), child: _chip(tab))],
       ),
     );
   }
 }
 
-/// Language, calculator, logout and avatar buttons (same order in every frame).
+/// Language, calculator, my page (avatar) and logout buttons (same order in every frame).
 class HeaderActions extends ConsumerWidget {
   const HeaderActions({super.key, this.compactLogout = false, this.dense = false});
 
@@ -151,15 +172,6 @@ class HeaderActions extends ConsumerWidget {
           ),
         ),
         gap,
-        if (compactLogout)
-          IconButton(tooltip: t.logout, onPressed: () => logoutFlow(context, ref), icon: const Icon(Icons.logout))
-        else
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(padding: pad, minimumSize: Size.zero),
-            onPressed: () => logoutFlow(context, ref),
-            child: Text(t.logout),
-          ),
-        gap,
         Semantics(
           button: true,
           label: t.myPage,
@@ -169,6 +181,15 @@ class HeaderActions extends ConsumerWidget {
             child: UserAvatar(user: user, radius: dense ? 15 : 18),
           ),
         ),
+        gap,
+        if (compactLogout)
+          IconButton(tooltip: t.logout, onPressed: () => logoutFlow(context, ref), icon: const Icon(Icons.logout))
+        else
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(padding: pad, minimumSize: Size.zero),
+            onPressed: () => logoutFlow(context, ref),
+            child: Text(t.logout),
+          ),
       ],
     );
   }

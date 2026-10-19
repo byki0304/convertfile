@@ -58,7 +58,7 @@ class _PdfMergePageState extends ConsumerState<PdfMergePage> {
   @override
   void initState() {
     super.initState();
-    setDropHandler(_addFiles);
+    setDropHandler(this, _addFiles);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final h = ref.read(pdfHandoffProvider);
       if (h != null && h.tab == PdfTab.merge && h.file != null) {
@@ -70,7 +70,7 @@ class _PdfMergePageState extends ConsumerState<PdfMergePage> {
 
   @override
   void dispose() {
-    setDropHandler(null);
+    setDropHandler(this, null);
     super.dispose();
   }
 
