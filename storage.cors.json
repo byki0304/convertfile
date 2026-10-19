@@ -1,6 +1,6 @@
 [
   {
-    "origin": ["http://localhost:*", "https://*.vercel.app"],
+    "origin": ["https://convertfile-nine.vercel.app", "http://localhost:*"],
     "method": ["GET", "HEAD", "PUT", "POST"],
     "responseHeader": ["Content-Type", "Content-Disposition", "Content-Length", "x-goog-resumable", "Authorization"],
     "maxAgeSeconds": 3600

@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "buildCommand": "if [ -f tool/vercel-build.sh ]; then bash tool/vercel-build.sh; else bash ../tool/vercel-build.sh; fi",
   "outputDirectory": "build/web",
   "installCommand": "true",
