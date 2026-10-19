@@ -52,10 +52,10 @@ firebase functions:secrets:set EXCHANGE_RATE_API_KEY
      --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest \
      --set-env-vars STORAGE_BUCKET=convertfile-9b293.firebasestorage.app
    gcloud run services add-iam-policy-binding convert-engine --region asia-northeast3 \
-     --member serviceAccount:<TASKS_INVOKER_SA> --role roles/run.invoker
+     --member serviceAccount:557200943471-compute@developer.gserviceaccount.com --role roles/run.invoker
    ```
    엔진 서비스 계정에는 Firestore, Storage 권한과 `GEMINI_API_KEY` 시크릿 접근 권한이 필요합니다.
-7. `functions/.env.example`을 `functions/.env`로 복사해 `ENGINE_URL`(엔진 주소), `TASKS_INVOKER_SA`(Cloud Tasks가 엔진을 부를 서비스 계정 이메일), 모델 이름을 적습니다. 비밀 값이 아니며 커밋하지 않습니다.
+7. `functions/.env`(커밋하지 않음, 비밀 값 아님)에 `ENGINE_URL=https://convert-engine-557200943471.asia-northeast3.run.app`, `TASKS_INVOKER_SA=557200943471-compute@developer.gserviceaccount.com`을 적습니다. 엔진 배포 후 출력된 주소가 다르면 그 주소로 바꿉니다. Functions가 이 계정 이름으로 작업을 만들 수 있도록 같은 계정에 `Service Account User` 역할도 줍니다.
 8. 배포:
    ```bash
    firebase deploy --only functions,firestore,storage
