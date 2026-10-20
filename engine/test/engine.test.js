@@ -13,7 +13,7 @@ const { irToDocx, setDocxFont } = require('../converters/docx');
 const { tablesToXlsx, tablesFromDelimited, toNumber, MAX_SHEETS } = require('../converters/xlsx');
 const { slidesToPptx, sheetsToPptx } = require('../converters/pptx');
 const { irToHwpx, sectionXml, headerXml } = require('../converters/hwpx');
-const { convertFile, mdHtml } = require('../converters');
+const { convertFile, mdHtml, chunkText } = require('../converters');
 const { checkHwpx } = require('../converters/inspect');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -57,6 +57,14 @@ test('irFromText splits paragraphs on blank lines', () => {
     { type: 'paragraph', text: '첫 줄\n이어짐' },
     { type: 'paragraph', text: '둘째' },
   ]);
+});
+
+test('chunkText keeps every character and respects the size limit', () => {
+  const text = ['가'.repeat(30), '나'.repeat(30), '다'.repeat(75)].join('\n\n');
+  const parts = chunkText(text, 50);
+  assert.ok(parts.every((p) => p.length <= 50));
+  assert.equal(parts.join('').replace(/\n/g, ''), text.replace(/\n/g, ''));
+  assert.deepEqual(chunkText('짧은 글', 50), ['짧은 글']);
 });
 
 test('irFromAi clamps levels and drops empty blocks', () => {

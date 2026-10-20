@@ -75,19 +75,73 @@ async function aiJson(ai, system, text, schema, validate) {
   }
 }
 
+const PDF_CHUNK_CHARS = 6000;
+const PDF_CHUNK_PARALLEL = 4;
+const PDF_CHUNK_TIMEOUT_MS = 100000;
+
+/** Splits text on paragraph breaks into pieces of at most `size` characters. */
+function chunkText(text, size = PDF_CHUNK_CHARS) {
+  const out = [];
+  let cur = '';
+  for (const para of String(text).replace(/\r\n?/g, '\n').split(/\n{2,}/)) {
+    if (cur && cur.length + para.length + 2 > size) {
+      out.push(cur);
+      cur = '';
+    }
+    cur += (cur ? '\n\n' : '') + para;
+    while (cur.length > size) {
+      out.push(cur.slice(0, size));
+      cur = cur.slice(size);
+    }
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+}
+
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/**
+ * Long PDFs are structured chunk by chunk so no single Gemini call runs past its time limit.
+ * A chunk the AI cannot structure keeps its plain paragraphs, so the conversion still completes.
+ */
 async function pdfIr(srcPath, workDir, ai) {
   const text = await textOf(srcPath, 'pdf', workDir, ai);
   if (!text.trim()) throw err('no-text-found');
-  const r = await aiJson(
-    ai,
-    'Restructure this extracted PDF text into document blocks (heading with level 1-3, paragraph, list, table). Keep the original language and wording; do not summarize.',
-    text,
-    SCHEMAS.blocks,
-    (v) => {
-      if (!Array.isArray(v.blocks)) throw err('ai-bad-json');
-    },
-  );
-  const blocks = ir.irFromAi(r.blocks);
+  await ai.count();
+  const system =
+    'Restructure this extracted PDF text into document blocks (heading with level 1-3, paragraph, list, table). Keep the original language and wording; do not summarize or drop anything. The text may start or end mid-document.';
+  const parts = await mapLimit(chunkText(text), PDF_CHUNK_PARALLEL, async (chunk, i) => {
+    try {
+      const r = await generateJson({
+        apiKey: ai.key,
+        model: ai.model,
+        system,
+        parts: [{ text: chunk }],
+        schema: SCHEMAS.blocks,
+        timeoutMs: PDF_CHUNK_TIMEOUT_MS,
+        validate: (v) => {
+          if (!Array.isArray(v.blocks)) throw err('ai-bad-json');
+        },
+      });
+      const blocks = ir.irFromAi(r.blocks);
+      if (blocks.length) return blocks;
+    } catch (e) {
+      console.warn(JSON.stringify({ pdfChunk: i, error: e.code || e.message }));
+    }
+    return ir.irFromText(chunk);
+  });
+  const blocks = parts.flat();
   if (!blocks.length) throw err('no-text-found');
   return blocks;
 }
@@ -243,4 +297,4 @@ async function convertFile({ srcPath, ext, target, workDir, ai, title }) {
   return { outPath, pageCount, fontSubstituted };
 }
 
-module.exports = { convertFile, irOf, textOf, htmlPage, mdHtml };
+module.exports = { convertFile, irOf, textOf, htmlPage, mdHtml, chunkText };
