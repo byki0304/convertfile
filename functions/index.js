@@ -31,6 +31,7 @@ const bucket = () => getStorage().bucket();
 
 const env = {
   model: () => process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+  searchModel: () => process.env.GEMINI_SEARCH_MODEL || 'gemini-2.5-flash',
   engineUrl: () => (process.env.ENGINE_URL || '').replace(/\/$/, ''),
   tasksSa: () => process.env.TASKS_INVOKER_SA || '',
   project: () => process.env.GCLOUD_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId,
@@ -445,13 +446,24 @@ async function answerGeneral(turn, ask, draft) {
     `Now (Asia/Seoul): ${ask.now}. Default location when the user does not name one: Seoul, South Korea.`,
     ask.history ? `Recent conversation:\n${ask.history}` : '',
   ].join('\n');
+  const searchModels = [...new Set([env.searchModel(), env.model()])];
+  for (const model of searchModels) {
+    try {
+      const r = await generateGrounded({ apiKey: aiKey(), model, system, prompt: ask.userText });
+      turn.aiText = r.text;
+      turn.sources = r.sources;
+      turn.searchQueries = r.queries;
+      return;
+    } catch (e) {
+      logger.warn('grounded answer failed', model, e.code, e.detail);
+    }
+  }
   try {
-    const r = await generateGrounded({ apiKey: aiKey(), model: env.model(), system, prompt: ask.userText });
+    const offline = `${system}\nGoogle Search is unavailable right now. Still answer as well as you can from your own knowledge, then add one short line on where to check the latest information.`;
+    const r = await generateGrounded({ apiKey: aiKey(), model: env.model(), system: offline, prompt: ask.userText, search: false });
     turn.aiText = r.text;
-    turn.sources = r.sources;
-    turn.searchQueries = r.queries;
   } catch (e) {
-    logger.warn('grounded answer failed', e.code, e.detail);
+    logger.warn('plain answer failed', e.code, e.detail);
     turn.aiText = draft && draft.trim() ? draft : pick(M.generalFail, ask.lang);
   }
 }

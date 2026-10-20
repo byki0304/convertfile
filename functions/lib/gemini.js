@@ -114,15 +114,16 @@ async function generateJson({ apiKey, model, system, parts, schema, validate }) 
 }
 
 /**
- * Free-text answer with Google Search grounding, for questions that need current information (news, weather, prices).
- * Returns { text, sources: [{ title, uri }], queries: [string] }.
+ * Free-text answer. With `search` (default) Gemini may use Google Search grounding for current information
+ * (news, weather, prices). Returns { text, sources: [{ title, uri }], queries: [string] }.
  */
-async function generateGrounded({ apiKey, model, system, prompt }) {
+async function generateGrounded({ apiKey, model, system, prompt, search = true }) {
   if (!apiKey) throw new AiError('ai-unavailable');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   let thinking = true;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] };
+    const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }] };
+    if (search) body.tools = [{ google_search: {} }];
     if (thinking) body.generationConfig = { thinkingConfig: { thinkingLevel: 'low' } };
     if (system) body.systemInstruction = { parts: [{ text: system }] };
     const res = await fetch(url, {
@@ -137,8 +138,14 @@ async function generateGrounded({ apiKey, model, system, prompt }) {
         attempt--;
         continue;
       }
-      if (attempt === 0) continue;
-      throw new AiError('ai-failed', `${res.status}`);
+      if (attempt === 0 && res.status !== 429) continue;
+      let reason = '';
+      try {
+        reason = JSON.parse(textBody).error?.message || '';
+      } catch {
+        reason = textBody;
+      }
+      throw new AiError(res.status === 429 ? 'ai-rate-limited' : 'ai-failed', `${res.status} ${String(reason).slice(0, 300)}`);
     }
     let json;
     try {
