@@ -30,6 +30,11 @@ const M = {
     en: "I couldn't create an answer. Please try again later.",
     ja: '回答を作成できませんでした。しばらくしてから再度お試しください。',
   },
+  aiBusy: {
+    ko: '지금 AI 서비스 사용 한도를 넘어 답을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    en: 'The AI service is over its usage limit right now, so no answer was created. Please try again later.',
+    ja: '現在AIサービスの利用上限を超えているため、回答を作成できませんでした。しばらくしてから再度お試しください。',
+  },
   intentFail: {
     ko: '요청을 이해하지 못했습니다. 원하는 결과 형식을 함께 말씀해 주세요.',
     en: "I couldn't understand the request. Please include the result format you want.",

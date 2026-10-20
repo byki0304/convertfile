@@ -31,7 +31,7 @@ const bucket = () => getStorage().bucket();
 
 const env = {
   model: () => process.env.GEMINI_MODEL || 'gemini-3.8-flash',
-  searchModel: () => process.env.GEMINI_SEARCH_MODEL || 'gemini-2.5-flash',
+  searchModel: () => process.env.GEMINI_SEARCH_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash',
   engineUrl: () => (process.env.ENGINE_URL || '').replace(/\/$/, ''),
   tasksSa: () => process.env.TASKS_INVOKER_SA || '',
   project: () => process.env.GCLOUD_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId,
@@ -396,6 +396,7 @@ exports.submitPrompt = onCall({ ...callOpts, memory: '2GiB', secrets: [GEMINI_AP
       system,
       parts: [{ text: userText || '(file only)' }],
       schema: SCHEMAS.home,
+      timeoutMs: 30000,
       validate: (v) => {
         if (!v || typeof v.targetMenu !== 'string' || typeof v.summaryText !== 'string') throw Object.assign(new Error(), { code: 'ai-bad-json' });
       },
@@ -446,6 +447,7 @@ async function answerGeneral(turn, ask, draft) {
     `Now (Asia/Seoul): ${ask.now}. Default location when the user does not name one: Seoul, South Korea.`,
     ask.history ? `Recent conversation:\n${ask.history}` : '',
   ].join('\n');
+  let limited = false;
   const searchModels = [...new Set([env.searchModel(), env.model()])];
   for (const model of searchModels) {
     try {
@@ -455,16 +457,19 @@ async function answerGeneral(turn, ask, draft) {
       turn.searchQueries = r.queries;
       return;
     } catch (e) {
+      limited ||= e.code === 'ai-rate-limited' || e.code === 'ai-timeout';
       logger.warn('grounded answer failed', model, e.code, e.detail);
     }
   }
   try {
     const offline = `${system}\nGoogle Search is unavailable right now. Still answer as well as you can from your own knowledge, then add one short line on where to check the latest information.`;
-    const r = await generateGrounded({ apiKey: aiKey(), model: env.model(), system: offline, prompt: ask.userText, search: false });
+    const r = await generateGrounded({ apiKey: aiKey(), model: env.model(), system: offline, prompt: ask.userText, search: false, timeoutMs: 35000 });
     turn.aiText = r.text;
   } catch (e) {
+    limited ||= e.code === 'ai-rate-limited' || e.code === 'ai-timeout';
     logger.warn('plain answer failed', e.code, e.detail);
-    turn.aiText = draft && draft.trim() ? draft : pick(M.generalFail, ask.lang);
+    if (draft && draft.trim()) turn.aiText = draft;
+    else turn.aiText = pick(limited ? M.aiBusy : M.generalFail, ask.lang);
   }
 }
 

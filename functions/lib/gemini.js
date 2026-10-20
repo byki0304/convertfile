@@ -61,19 +61,49 @@ const SCHEMAS = {
   ocr: S.obj({ pages: S.arr(S.obj({ page: S.int(), text: S.str() }, ['page', 'text'])) }, ['pages']),
 };
 
-async function callOnce({ apiKey, model, system, parts, schema, thinking }) {
+function errorReason(textBody) {
+  try {
+    return String(JSON.parse(textBody).error?.message || '').slice(0, 300);
+  } catch {
+    return String(textBody).slice(0, 300);
+  }
+}
+
+/** POSTs generateContent with a time limit and logs model, status and duration (never the key or prompt). */
+async function post({ apiKey, model, body, timeoutMs }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const t0 = Date.now();
+  let res;
+  let textBody;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    textBody = await res.text();
+  } catch (e) {
+    const timeout = e.name === 'TimeoutError' || e.name === 'AbortError';
+    console.warn(JSON.stringify({ gemini: model, status: timeout ? 'timeout' : 'network', ms: Date.now() - t0 }));
+    throw new AiError(timeout ? 'ai-timeout' : 'ai-failed', timeout ? `timeout ${timeoutMs}ms` : e.message);
+  }
+  const log = { gemini: model, status: res.status, ms: Date.now() - t0 };
+  if (res.ok) console.log(JSON.stringify(log));
+  else console.warn(JSON.stringify({ ...log, reason: errorReason(textBody) }));
+  return { res, textBody };
+}
+
+async function callOnce({ apiKey, model, system, parts, schema, thinking, timeoutMs = 120000 }) {
   const generationConfig = { responseMimeType: 'application/json', responseSchema: schema };
   if (thinking) generationConfig.thinkingConfig = { thinkingLevel: 'low' };
   const body = { contents: [{ role: 'user', parts }], generationConfig };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify(body),
-  });
-  const textBody = await res.text();
-  if (!res.ok) throw new AiError(res.status === 400 && /thinking/i.test(textBody) ? 'thinking-unsupported' : 'ai-failed', `${res.status}`);
+  const { res, textBody } = await post({ apiKey, model, body, timeoutMs });
+  if (!res.ok) {
+    if (res.status === 400 && /thinking/i.test(textBody)) throw new AiError('thinking-unsupported');
+    throw new AiError(res.status === 429 ? 'ai-rate-limited' : 'ai-failed', `${res.status} ${errorReason(textBody)}`);
+  }
   let json;
   try {
     json = JSON.parse(textBody);
@@ -92,13 +122,13 @@ async function callOnce({ apiKey, model, system, parts, schema, thinking }) {
  * Calls Gemini and returns parsed JSON. Tries thinking=low first; if the model rejects thinking, retries without it.
  * A broken JSON answer is asked once more. `validate` may throw to force that retry.
  */
-async function generateJson({ apiKey, model, system, parts, schema, validate }) {
+async function generateJson({ apiKey, model, system, parts, schema, validate, timeoutMs }) {
   if (!apiKey) throw new AiError('ai-unavailable');
   let thinking = true;
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const v = await callOnce({ apiKey, model, system, parts, schema, thinking });
+      const v = await callOnce({ apiKey, model, system, parts, schema, thinking, timeoutMs });
       if (validate) validate(v);
       return v;
     } catch (e) {
@@ -108,6 +138,7 @@ async function generateJson({ apiKey, model, system, parts, schema, validate }) 
         attempt--;
         continue;
       }
+      if (e.code === 'ai-rate-limited' || e.code === 'ai-timeout') break;
     }
   }
   throw new AiError(lastErr?.code === 'ai-bad-json' ? 'ai-bad-json' : 'ai-failed', lastErr?.detail);
@@ -117,35 +148,23 @@ async function generateJson({ apiKey, model, system, parts, schema, validate }) 
  * Free-text answer. With `search` (default) Gemini may use Google Search grounding for current information
  * (news, weather, prices). Returns { text, sources: [{ title, uri }], queries: [string] }.
  */
-async function generateGrounded({ apiKey, model, system, prompt, search = true }) {
+async function generateGrounded({ apiKey, model, system, prompt, search = true, timeoutMs = 45000 }) {
   if (!apiKey) throw new AiError('ai-unavailable');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   let thinking = true;
   for (let attempt = 0; attempt < 2; attempt++) {
     const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }] };
     if (search) body.tools = [{ google_search: {} }];
     if (thinking) body.generationConfig = { thinkingConfig: { thinkingLevel: 'low' } };
     if (system) body.systemInstruction = { parts: [{ text: system }] };
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify(body),
-    });
-    const textBody = await res.text();
+    const { res, textBody } = await post({ apiKey, model, body, timeoutMs });
     if (!res.ok) {
       if (thinking && res.status === 400 && /thinking/i.test(textBody)) {
         thinking = false;
         attempt--;
         continue;
       }
-      if (attempt === 0 && res.status !== 429) continue;
-      let reason = '';
-      try {
-        reason = JSON.parse(textBody).error?.message || '';
-      } catch {
-        reason = textBody;
-      }
-      throw new AiError(res.status === 429 ? 'ai-rate-limited' : 'ai-failed', `${res.status} ${String(reason).slice(0, 300)}`);
+      if (attempt === 0 && res.status >= 500) continue;
+      throw new AiError(res.status === 429 ? 'ai-rate-limited' : 'ai-failed', `${res.status} ${errorReason(textBody)}`);
     }
     let json;
     try {
