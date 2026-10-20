@@ -526,6 +526,59 @@ class _TurnListState extends ConsumerState<TurnList> {
     );
   }
 
+  /// Grounding sources plus the Google search suggestions that Gemini used.
+  Widget _sources(AppText t, Turn x) => Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (x.sources.isNotEmpty) ...[
+          Text(
+            t.s('출처', 'Sources', '出典'),
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.sub),
+          ),
+          for (final s in x.sources)
+            InkWell(
+              onTap: () => openLink(s.uri),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.link_rounded, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        s.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.primary, decoration: TextDecoration.underline, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+        if (x.searchQueries.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final q in x.searchQueries)
+                ActionChip(
+                  avatar: const Icon(Icons.search_rounded, size: 16),
+                  label: Text(q, style: const TextStyle(fontSize: 12)),
+                  onPressed: () => openLink('https://www.google.com/search?q=${Uri.encodeQueryComponent(q)}'),
+                ),
+            ],
+          ),
+        ],
+      ],
+    ),
+  );
+
   Widget _turn(AppText t, Turn x, bool backup) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -571,6 +624,7 @@ class _TurnListState extends ConsumerState<TurnList> {
                 children: [
                   if (x.aiText.isNotEmpty) SelectableText(x.aiText),
                   for (final l in x.summaryLines) Text('• $l'),
+                  if (x.sources.isNotEmpty || x.searchQueries.isNotEmpty) _sources(t, x),
                   if (x.routeCard != null && !backup) RouteCard(turn: x),
                 ],
               ),

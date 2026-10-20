@@ -20,6 +20,9 @@ external void _downloadBytes(JSUint8Array bytes, String name, String mime);
 @JS('cfOpenDownload')
 external void _openDownload(String url);
 
+@JS('cfOpenLink')
+external void _openLink(String url);
+
 @JS('cfSpeechSupported')
 external bool _speechSupported();
 
@@ -79,6 +82,8 @@ void setDropHandler(Object owner, void Function(List<PickedFile> files)? handler
 void downloadBytes(Uint8List bytes, String name, String mime) => _downloadBytes(bytes.toJS, name, mime);
 
 void openDownload(String url) => _openDownload(url);
+
+void openLink(String url) => _openLink(url);
 
 bool speechSupported() => _speechSupported();
 

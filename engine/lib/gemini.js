@@ -113,6 +113,65 @@ async function generateJson({ apiKey, model, system, parts, schema, validate }) 
   throw new AiError(lastErr?.code === 'ai-bad-json' ? 'ai-bad-json' : 'ai-failed', lastErr?.detail);
 }
 
+/**
+ * Free-text answer with Google Search grounding, for questions that need current information (news, weather, prices).
+ * Returns { text, sources: [{ title, uri }], queries: [string] }.
+ */
+async function generateGrounded({ apiKey, model, system, prompt }) {
+  if (!apiKey) throw new AiError('ai-unavailable');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  let thinking = true;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] };
+    if (thinking) body.generationConfig = { thinkingConfig: { thinkingLevel: 'low' } };
+    if (system) body.systemInstruction = { parts: [{ text: system }] };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+    });
+    const textBody = await res.text();
+    if (!res.ok) {
+      if (thinking && res.status === 400 && /thinking/i.test(textBody)) {
+        thinking = false;
+        attempt--;
+        continue;
+      }
+      if (attempt === 0) continue;
+      throw new AiError('ai-failed', `${res.status}`);
+    }
+    let json;
+    try {
+      json = JSON.parse(textBody);
+    } catch {
+      throw new AiError('ai-failed', 'bad envelope');
+    }
+    const cand = json.candidates?.[0];
+    const text = (cand?.content?.parts || [])
+      .filter((p) => !p.thought)
+      .map((p) => p.text || '')
+      .join('')
+      .trim();
+    if (!text) {
+      if (attempt === 0) continue;
+      throw new AiError('ai-failed', 'empty');
+    }
+    const meta = cand.groundingMetadata || {};
+    const seen = new Set();
+    const sources = [];
+    for (const c of meta.groundingChunks || []) {
+      const uri = c.web?.uri;
+      if (!uri || seen.has(uri)) continue;
+      seen.add(uri);
+      sources.push({ title: String(c.web.title || uri).slice(0, 200), uri });
+      if (sources.length >= 5) break;
+    }
+    const queries = (meta.webSearchQueries || []).map((q) => String(q).slice(0, 200)).slice(0, 3);
+    return { text, sources, queries };
+  }
+  throw new AiError('ai-failed');
+}
+
 const clip = (text, n = 30000) => String(text || '').slice(0, n);
 
-module.exports = { AiError, SCHEMAS, generateJson, clip };
+module.exports = { AiError, SCHEMAS, generateJson, generateGrounded, clip };

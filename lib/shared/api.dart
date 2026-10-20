@@ -120,6 +120,11 @@ class Turn {
       targetMenu = d['targetMenu'] as String? ?? 'general',
       routeCard = d['routeCard'] is Map ? Map<String, dynamic>.from(d['routeCard'] as Map) : null,
       summaryLines = (d['summaryLines'] as List?)?.cast<String>() ?? const [],
+      sources = [
+        for (final s in (d['sources'] as List? ?? const []))
+          if (s is Map && s['uri'] is String) (title: (s['title'] as String?) ?? s['uri'] as String, uri: s['uri'] as String),
+      ],
+      searchQueries = (d['searchQueries'] as List?)?.whereType<String>().toList() ?? const [],
       createdAt = _ts(d['createdAt']),
       expireAt = _ts(d['expireAt']),
       userHidden = d['userHidden'] == true,
@@ -134,6 +139,8 @@ class Turn {
   final String targetMenu;
   final Map<String, dynamic>? routeCard;
   final List<String> summaryLines;
+  final List<({String title, String uri})> sources;
+  final List<String> searchQueries;
   final DateTime? createdAt;
   final DateTime? expireAt;
   final bool userHidden;

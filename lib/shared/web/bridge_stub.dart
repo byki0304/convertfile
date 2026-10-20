@@ -10,6 +10,8 @@ void downloadBytes(Uint8List bytes, String name, String mime) {}
 
 void openDownload(String url) {}
 
+void openLink(String url) {}
+
 bool speechSupported() => false;
 
 bool speechStart(String lang, void Function(String text) onText, void Function() onEnd) => false;

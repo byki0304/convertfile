@@ -112,6 +112,11 @@
     a.remove();
   };
 
+  window.cfOpenLink = function (url) {
+    if (!/^https?:\/\//i.test(url)) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   let recognizer = null;
 
   window.cfSpeechSupported = function () {

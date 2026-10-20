@@ -10,7 +10,7 @@ const { getStorage } = require('firebase-admin/storage');
 const { getAuth } = require('firebase-admin/auth');
 
 const rules = require('./lib/file_rules');
-const { SCHEMAS, generateJson, clip } = require('./lib/gemini');
+const { SCHEMAS, generateJson, generateGrounded, clip } = require('./lib/gemini');
 const { extractText } = require('./lib/text_extract');
 const { M, MENU_NAMES, pick } = require('./lib/messages');
 
@@ -211,7 +211,8 @@ async function enqueue(uid, conversionId) {
   });
 }
 
-const callOpts = { timeoutSeconds: 300, memory: '1GiB' };
+const publicCall = { invoker: 'public' };
+const callOpts = { ...publicCall, timeoutSeconds: 300, memory: '1GiB' };
 
 // ---------- conversions ----------
 
@@ -274,7 +275,7 @@ exports.requestConversion = onCall(callOpts, async (req) => {
   return { conversionId: ref.id };
 });
 
-exports.getDownloadUrl = onCall(async (req) => {
+exports.getDownloadUrl = onCall(publicCall, async (req) => {
   const { uid } = who(req);
   const id = req.data?.conversionId;
   if (typeof id !== 'string') fail('engine-failed', 'invalid-argument');
@@ -414,23 +415,48 @@ exports.submitPrompt = onCall({ ...callOpts, memory: '2GiB', secrets: [GEMINI_AP
     targetMenu: intent?.targetMenu || 'general',
     routeCard: null,
     summaryLines: [],
+    sources: [],
+    searchQueries: [],
     createdAt: Timestamp.now(),
     expireAt: guest ? Timestamp.fromMillis(Date.now() + rules.LIMITS.retentionHours * HOUR) : null,
     userHidden: false,
     aiHidden: false,
   };
 
+  const ask = { userText, history, now, lang };
   if (!intent) {
-    turn.aiText = pick(M.intentFail, lang);
+    if (!upload && userText.trim()) await answerGeneral(turn, ask, '');
+    else turn.aiText = pick(M.intentFail, lang);
   } else {
-    await resolveIntent(turn, intent, upload, lang, uid, guest);
+    await resolveIntent(turn, intent, upload, lang, uid, guest, ask);
   }
   turn.aiText = String(turn.aiText || '').slice(0, 8000);
   const ref = await db.collection(`users/${uid}/turns`).add(turn);
   return { turnId: ref.id };
 });
 
-async function resolveIntent(turn, intent, upload, lang, uid, guest) {
+/** Answers any question with Gemini + Google Search; keeps the router's draft answer if the grounded call fails. */
+async function answerGeneral(turn, ask, draft) {
+  const system = [
+    'You are the assistant of ConvertFile, a document conversion workbench. Answer the user question directly and helpfully.',
+    'Use Google Search for anything current or factual: news, weather forecasts, prices, exchange rates, schedules, sports, people.',
+    'Never say you cannot access real-time information; search instead. Give concrete facts, dates and numbers in a short answer.',
+    `Answer in ${{ ko: 'Korean', en: 'English', ja: 'Japanese' }[ask.lang]}. Plain text, no markdown tables.`,
+    `Now (Asia/Seoul): ${ask.now}. Default location when the user does not name one: Seoul, South Korea.`,
+    ask.history ? `Recent conversation:\n${ask.history}` : '',
+  ].join('\n');
+  try {
+    const r = await generateGrounded({ apiKey: aiKey(), model: env.model(), system, prompt: ask.userText });
+    turn.aiText = r.text;
+    turn.sources = r.sources;
+    turn.searchQueries = r.queries;
+  } catch (e) {
+    logger.warn('grounded answer failed', e.code, e.detail);
+    turn.aiText = draft && draft.trim() ? draft : pick(M.generalFail, ask.lang);
+  }
+}
+
+async function resolveIntent(turn, intent, upload, lang, uid, guest, ask) {
   const menu = intent.targetMenu;
   if (menu.startsWith('to_')) {
     const target = menu.slice(3);
@@ -497,10 +523,11 @@ async function resolveIntent(turn, intent, upload, lang, uid, guest) {
     }
     return;
   }
-  turn.aiText = intent.answerText && intent.answerText.trim() ? intent.answerText : pick(M.generalFail, lang);
+  if (ask.userText.trim()) await answerGeneral(turn, ask, intent.answerText || '');
+  else turn.aiText = intent.answerText && intent.answerText.trim() ? intent.answerText : pick(M.generalFail, lang);
 }
 
-exports.hideTurnParts = onCall(async (req) => {
+exports.hideTurnParts = onCall(publicCall, async (req) => {
   const { uid } = who(req);
   const parts = Array.isArray(req.data?.parts) ? req.data.parts.slice(0, 400) : [];
   for (const p of parts) {
@@ -520,7 +547,7 @@ exports.hideTurnParts = onCall(async (req) => {
   return { ok: true };
 });
 
-exports.deleteByIds = onCall(async (req) => {
+exports.deleteByIds = onCall(publicCall, async (req) => {
   const { uid } = who(req);
   const ids = Array.isArray(req.data?.conversionIds) ? req.data.conversionIds.filter((x) => typeof x === 'string').slice(0, 400) : [];
   let deleted = 0;
@@ -552,7 +579,7 @@ exports.deleteByIds = onCall(async (req) => {
   return { deleted, skipped };
 });
 
-exports.withdraw = onCall({ timeoutSeconds: 540, memory: '1GiB' }, async (req) => {
+exports.withdraw = onCall({ ...publicCall, timeoutSeconds: 540, memory: '1GiB' }, async (req) => {
   const { uid } = who(req);
   await db.recursiveDelete(db.doc(`users/${uid}`));
   for (const field of ['actorUid', 'targetUid']) {
@@ -575,7 +602,7 @@ exports.withdraw = onCall({ timeoutSeconds: 540, memory: '1GiB' }, async (req) =
 
 const FX = ['USD', 'EUR', 'JPY', 'CNY', 'GBP', 'HKD', 'SGD', 'AUD'];
 
-exports.getExchangeRates = onCall({ secrets: [EXCHANGE_RATE_API_KEY] }, async (req) => {
+exports.getExchangeRates = onCall({ ...publicCall, secrets: [EXCHANGE_RATE_API_KEY] }, async (req) => {
   who(req);
   const ref = db.doc('fx_cache/latest');
   const cached = (await ref.get()).data();
@@ -627,7 +654,7 @@ exports.mirrorToBackup = onDocumentWritten(
   },
 );
 
-exports.readBackup = onCall(async (req) => {
+exports.readBackup = onCall(publicCall, async (req) => {
   const { uid } = who(req);
   const col = req.data?.collection;
   if (!['conversions', 'turns'].includes(col)) fail('engine-failed', 'invalid-argument');
@@ -646,7 +673,7 @@ async function countUser(store, uid) {
   return n;
 }
 
-exports.dbStatus = onCall(async (req) => {
+exports.dbStatus = onCall(publicCall, async (req) => {
   const { uid } = who(req);
   const [primaryCount, backupCount, meta] = await Promise.all([
     countUser(db, uid),
@@ -657,7 +684,7 @@ exports.dbStatus = onCall(async (req) => {
   return { primaryCount, backupCount, lastMirroredAt: last ? last.toMillis() : null };
 });
 
-exports.syncBackup = onCall({ timeoutSeconds: 540 }, async (req) => {
+exports.syncBackup = onCall({ ...publicCall, timeoutSeconds: 540 }, async (req) => {
   const { uid } = who(req);
   const now = Timestamp.now();
   for (const c of USER_COLLECTIONS) {
