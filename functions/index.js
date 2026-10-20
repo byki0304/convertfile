@@ -217,7 +217,7 @@ const callOpts = { ...publicCall, timeoutSeconds: 300, memory: '1GiB' };
 
 // ---------- conversions ----------
 
-exports.requestConversion = onCall(callOpts, async (req) => {
+exports.requestConversion = onCall({ ...callOpts, secrets: [GEMINI_API_KEY] }, async (req) => {
   const { uid, guest } = who(req);
   const { path, name, target, turnId } = req.data || {};
   if (typeof name !== 'string' || !name || name.length > 255) fail('unsupported-format', 'invalid-argument');
