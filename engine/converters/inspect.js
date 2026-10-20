@@ -34,9 +34,22 @@ async function checkPdf(buf) {
     const doc = await PDFDocument.load(buf, { updateMetadata: false });
     return doc.getPageCount();
   } catch (e) {
-    if (/encrypt/i.test(String(e && (e.name + e.message)))) throw err('encrypted-file');
+    if (/encrypt/i.test(String(e && (e.name + e.message)))) return openablePdfPages(buf);
     throw err('engine-failed');
   }
+}
+
+/** Permission-only encryption (empty open password) is readable; only an open password blocks conversion. */
+async function openablePdfPages(buf) {
+  const { getDocumentProxy } = await import('unpdf');
+  let doc;
+  try {
+    doc = await getDocumentProxy(new Uint8Array(buf));
+  } catch (e) {
+    if (e && e.name === 'PasswordException') throw err('encrypted-file');
+    throw err('engine-failed');
+  }
+  return doc.numPages;
 }
 
 async function pdfPageCount(buf) {
